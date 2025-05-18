@@ -15,10 +15,9 @@ from .archive_checker import process_directory
 # 尝试导入TUI界面模块（可能在某些环境下不可用）
 try:
     from textual_logger import TextualLoggerManager
-    TEXTUAL_AVAILABLE = True
 except ImportError:
     TEXTUAL_AVAILABLE = False
-
+TEXTUAL_AVAILABLE = False
 from .config import TEXTUAL_LAYOUT
 
 def run_check(paths=None, use_clipboard=False, no_tui=False, force_check=False):

@@ -12,3 +12,4 @@ wheels/
 /src/badzipfliter/logs
 *.log
 /src/badzfliter/archive_check_history.json
+/src/imgu/imgutils-main
