@@ -6,6 +6,9 @@ import pillow_avif  # AVIF支持
 import pillow_jxl 
 from io import BytesIO
 from loguru import logger
+os.environ["HF_DATASETS_OFFLINE"] = "1"  
+os.environ["TRANSFORMERS_OFFLINE"] = "1"
+# os.environ["HF_HOME"] = "/path/to/your/permanent/cache"
 from imgutils.validate import get_monochrome_score, is_monochrome  
 
 class GrayscaleImageDetector:
@@ -155,7 +158,88 @@ class GrayscaleImageDetector:
                     return None, 'monochrome'
                     
             return img, None
-            
         except Exception as e:
             logger.error(f"[#file_ops]❌ 传统灰度检测发生错误: {str(e)}")
             return img, None
+            
+            
+if __name__ == "__main__":
+    import sys
+    import argparse
+    from pathlib import Path
+    
+    # 创建命令行参数解析器
+    parser = argparse.ArgumentParser(description='灰度图片检测工具')
+    parser.add_argument('--path', type=str, help='要检测的图片路径或包含图片的文件夹路径')
+    parser.add_argument('--recursive', action='store_true', help='是否递归处理子文件夹')
+    parser.add_argument('--delete', action='store_true', help='是否删除检测到的灰度图')
+    args = parser.parse_args()
+    
+    # 如果没有提供路径，则提示用户输入
+    if not args.path:
+        args.path = input("请输入图片路径或文件夹路径: ").strip()
+        if not args.path:
+            print("未提供有效路径，退出程序")
+            sys.exit(1)
+    
+    # 获取所有图片文件
+    path = Path(args.path)
+    if path.is_file():
+        image_files = [str(path)]
+    else:
+        # 支持的图片格式
+        image_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.avif', '.jxl']
+        
+        if args.recursive:
+            # 递归获取所有图片
+            image_files = []
+            for ext in image_extensions:
+                image_files.extend([str(f) for f in path.glob(f'**/*{ext}')])
+        else:
+            # 只获取当前文件夹下的图片
+            image_files = []
+            for ext in image_extensions:
+                image_files.extend([str(f) for f in path.glob(f'*{ext}')])
+    
+    # 检查是否找到图片
+    if not image_files:
+        print(f"在指定路径 '{args.path}' 下未找到图片文件")
+        sys.exit(1)
+    
+    print(f"发现 {len(image_files)} 个图片文件，开始检测...")
+    
+    # 创建灰度图检测器并开始检测
+    detector = GrayscaleImageDetector()
+    to_delete, reasons = detector.detect_grayscale_images(image_files)
+    
+    # 输出检测结果
+    print(f"\n检测完成！发现 {len(to_delete)} 个灰度/纯色图片:")
+    
+    # 按照类型分类输出
+    reason_groups = {}
+    for img_path, info in reasons.items():
+        reason = info['reason']
+        if reason not in reason_groups:
+            reason_groups[reason] = []
+        reason_groups[reason].append(img_path)
+    
+    # 输出分类结果
+    for reason, paths in reason_groups.items():
+        detail = paths[0] and reasons[paths[0]]['details']
+        print(f"\n{detail} ({len(paths)}个):")
+        for path in paths:
+            print(f" - {path}")
+    
+    # 如果指定了删除选项，则删除灰度图
+    if args.delete and to_delete:
+        confirm = input(f"\n确认要删除这 {len(to_delete)} 个图片吗? (y/n): ").strip().lower()
+        if confirm == 'y':
+            for img_path in to_delete:
+                try:
+                    os.remove(img_path)
+                    print(f"已删除: {img_path}")
+                except Exception as e:
+                    print(f"删除失败 {img_path}: {e}")
+            print(f"\n删除操作完成，共删除 {len(to_delete)} 个文件")
+        else:
+            print("已取消删除操作")
