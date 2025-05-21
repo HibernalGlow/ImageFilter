@@ -65,6 +65,7 @@ dev = [
 [project.scripts]
 imgfilter = "imgfilter.__main__:main"
 badzfilter = "badzfilter.__main__:main"
+batchfilter = "batchfilter.__main__:main"
 hashu = "hashu.__main__:main"
 artfliter = "artfliter.__main__:main"
 rawfilter = "rawfilter.__main__:main"

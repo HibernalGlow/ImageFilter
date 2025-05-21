@@ -57,11 +57,11 @@ class GrayscaleImageDetector:
                     
                     logger.info(f"[#file_ops]🖼️ 标记删除{removal_reasons[img_path]['details']}: {os.path.basename(img_path)}")
                     
-            except Exception as e:
-                logger.error(f"[#file_ops]❌ 处理灰度图检测失败 {img_path}: {e}")
+            except Exception as e:                logger.error(f"[#file_ops]❌ 处理灰度图检测失败 {img_path}: {e}")
 
                 
         return to_delete, removal_reasons
+        
     def detect_grayscale_image_bytes(self, image_data):
         """
         检测图片字节数据是否为灰度图/纯白图/纯黑图
@@ -79,7 +79,16 @@ class GrayscaleImageDetector:
             else:
                 img = Image.open(BytesIO(image_data))
                 
-            # 使用is_monochrome函数进行判断
+            # 先计算灰度分数
+            mono_score = get_monochrome_score(img)
+            logger.info(f"[#file_ops]🖼️ 灰度分数: {mono_score:.4f}")
+            
+            # 根据灰度分数判断是否为灰度图
+            if mono_score >= 0.85:  # 可以根据需要调整阈值
+                logger.info(f"[#file_ops]🖼️ 基于灰度分数 {mono_score:.4f} 检测到灰度图")
+                return (None, 'monochrome')
+                
+            # 使用is_monochrome函数进行辅助判断
             if is_monochrome(img):
                 logger.info(f"[#file_ops]🖼️ is_monochrome检测到灰度图")
                 return (None, 'monochrome')
@@ -167,12 +176,14 @@ if __name__ == "__main__":
     import sys
     import argparse
     from pathlib import Path
+    import datetime
     
     # 创建命令行参数解析器
     parser = argparse.ArgumentParser(description='灰度图片检测工具')
     parser.add_argument('--path', type=str, help='要检测的图片路径或包含图片的文件夹路径')
     parser.add_argument('--recursive', action='store_true', help='是否递归处理子文件夹')
     parser.add_argument('--delete', action='store_true', help='是否删除检测到的灰度图')
+    parser.add_argument('--report', action='store_true', help='生成Markdown报告', default=True)
     args = parser.parse_args()
     
     # 如果没有提供路径，则提示用户输入
@@ -229,6 +240,56 @@ if __name__ == "__main__":
         print(f"\n{detail} ({len(paths)}个):")
         for path in paths:
             print(f" - {path}")
+      # 生成Markdown报告
+    if args.report and reason_groups:
+        # 创建报告文件名，使用当前时间
+        now = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        report_name = f"grayscale_report_{now}.md"
+        
+        # 保存原始路径对象，防止被覆盖
+        input_path = Path(args.path)
+        # 如果路径是目录，则在该目录下创建报告，否则在当前目录创建
+        report_dir = input_path if input_path.is_dir() else input_path.parent
+        report_path = report_dir / report_name
+        
+        print(f"\n正在生成Markdown报告: {report_path}")
+        
+        with open(report_path, "w", encoding="utf-8") as f:
+            # 写入报告标题和摘要
+            f.write(f"# 灰度图片检测报告\n\n")
+            f.write(f"**检测时间**: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+            f.write(f"**检测路径**: {args.path}\n\n")
+            f.write(f"**递归检测**: {'是' if args.recursive else '否'}\n\n")
+            f.write(f"**检测结果摘要**:\n\n")
+            f.write(f"- 检测的图片总数: {len(image_files)}\n")
+            f.write(f"- 发现灰度/纯色图片: {len(to_delete)}\n\n")
+            
+            # 按类型分组写入检测到的图片
+            f.write(f"## 检测结果详情\n\n")
+            
+            for reason, paths in reason_groups.items():
+                detail = reasons[paths[0]]['details']
+                f.write(f"### {detail} ({len(paths)}个)\n\n")
+                
+                # 创建表格头部
+                f.write("| 图片 | 文件路径 |\n")
+                f.write("|------|----------|\n")
+                
+                # 添加每个图片的预览和路径
+                for img_path in paths:
+                    # 使用绝对路径以确保在Markdown中正确显示
+                    abs_path = os.path.abspath(img_path).replace("\\", "/")
+                    filename = os.path.basename(img_path)
+                    f.write(f"| ![]({abs_path}) | {filename} |\n")
+                
+                f.write("\n")
+            
+            # 添加注意事项
+            f.write("## 注意事项\n\n")
+            f.write("1. 图片预览在Markdown查看器中可能需要调整图片路径\n")
+            f.write("2. 若要删除检测到的图片，请使用 `--delete` 参数重新运行命令\n")
+            
+        print(f"Markdown报告已生成: {report_path}")
     
     # 如果指定了删除选项，则删除灰度图
     if args.delete and to_delete:

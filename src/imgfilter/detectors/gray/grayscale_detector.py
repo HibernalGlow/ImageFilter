@@ -8,7 +8,7 @@ import pillow_jxl
 from rich.console import Console
 from rich.table import Table
 from rich.style import Style
-import logging
+from loguru import logger
 from glob import glob
 import os
 import argparse
@@ -91,7 +91,7 @@ class GrayscaleResult:
             return "|".join(reasons) if reasons else None
             
         except Exception as e:
-            logging.error(f"[#update_log]❌ removal_reason计算错误: {str(e)}")
+            logger.error(f"[#update_log]❌ removal_reason计算错误: {str(e)}")
             return None
 
 class GrayscaleDetector:
@@ -206,7 +206,7 @@ class GrayscaleDetector:
             )
             
         except Exception as e:
-            logging.error(f"图片分析失败: {str(e)}", exc_info=True)
+            logger.error(f"图片分析失败: {str(e)}", exc_info=True)
             raise ValueError(f"分析失败: {str(e)}") from e
 
     def is_white_image(self, image: Union[str, Image.Image, bytes]) -> bool:
