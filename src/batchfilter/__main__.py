@@ -3,8 +3,8 @@ import sys
 import argparse
 from pathlib import Path
 from typing import Dict, Any, List, Set, Tuple, Optional
-from common.archive import ArchiveHandler,SUPPORTED_ARCHIVE_FORMATS
-from common.input import InputHandler
+from imgfilter.utils.archive import ArchiveHandler,SUPPORTED_ARCHIVE_FORMATS
+from imgfilter.utils.input import InputHandler
 from textual_preset import create_config_app
 from batchfilter.utils.merge import ArchiveMerger
 from textual_logger import TextualLoggerManager

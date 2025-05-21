@@ -11,9 +11,9 @@ from pathlib import Path
 from typing import Tuple, List, Optional, Dict, Any
 from concurrent.futures import ThreadPoolExecutor
 from loguru import logger
-from common.backup import BackupHandler
+from imgfilter.utils.backup import BackupHandler
 from imgfilter.core.filter import ImageFilter
-from common.input import InputHandler
+from imgfilter.utils.input import InputHandler
 
 # 全局变量定义
 SUPPORTED_ARCHIVE_FORMATS = ['.zip', '.rar', '.7z', '.cbz', '.cbr']

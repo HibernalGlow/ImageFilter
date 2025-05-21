@@ -9,11 +9,11 @@ import subprocess
 import argparse
 import pyperclip
 from textual_preset import create_config_app, ConfigOption, CheckboxOption, InputOption, PresetConfig
-from common.backup import BackupHandler
-from common.archive_process import ArchiveHandler
+from imgfilter.utils.backup import BackupHandler
+from imgfilter.utils.archive_process import ArchiveHandler
 from imgfilter.scripts.image_filter_old import ImageFilter
-from common.input import InputHandler
-from common.path import PathHandler, ExtractMode
+from imgfilter.utils.input import InputHandler
+from imgfilter.utils.path import PathHandler, ExtractMode
 import platform
 import stat
 import threading

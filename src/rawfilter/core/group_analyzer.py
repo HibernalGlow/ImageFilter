@@ -5,12 +5,10 @@
 
 import os
 import re
-import logging
 from typing import List, Dict, Tuple, Optional, Set
 from dataclasses import dataclass
-from .number_shortener import shorten_number_cn
-
-logger = logging.getLogger(__name__)
+from rawfilter.core.number_shortener import shorten_number_cn
+from loguru import logger
 
 @dataclass
 class FileMetrics:

@@ -18,7 +18,7 @@ from io import BytesIO
 import random
 from concurrent.futures import ThreadPoolExecutor
 from hashu.core.calculate_hash_custom import ImageClarityEvaluator
-from .number_shortener import shorten_number_cn
+from rawfilter.core.number_shortener import shorten_number_cn
 import re
 from rawfilter.core.group_analyzer import GroupAnalyzer
 import json
@@ -711,7 +711,11 @@ def main():
     """主函数，用于命令行运行"""
     # 获取配置文件路径
     config_path = os.path.join(os.path.dirname(__file__), 'multi_analyzer_config.json')
-      # 创建预设配置
+    
+    # 创建Typer应用
+    app = typer.Typer(help="Multi文件分析器")
+      
+    # 创建预设配置
     preset_configs = {
         "标准分析": {
             "description": "标准分析配置",

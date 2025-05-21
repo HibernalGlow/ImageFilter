@@ -29,7 +29,7 @@ from opencc import OpenCC  # 用于繁简转换
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from hashu.core.calculate_hash_custom import ImageClarityEvaluator
 from textual_logger import TextualLoggerManager
-from .core.number_shortener import shorten_number_cn
+from rawfilter.core.number_shortener import shorten_number_cn
 import json
 from rawfilter.core.group_analyzer import GroupAnalyzer
 
