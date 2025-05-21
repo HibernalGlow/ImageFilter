@@ -1,10 +1,9 @@
 import os
-import logging
 import subprocess
 from pathlib import Path
 from typing import Optional
 import dotenv
-
+from loguru import logger
 dotenv.load_dotenv()
 # 常量配置
 SCRIPTS_DIR = Path(os.getenv("SCRIPTS_DIR"))
@@ -37,11 +36,11 @@ def get_latest_hash_file_path() -> Optional[str]:
         if os.path.exists(latest_path):
             return latest_path
         else:
-            logging.info(f"❌ 最新的哈希文件不存在: {latest_path}")
+            logger.info(f"❌ 最新的哈希文件不存在: {latest_path}")
             return None
             
     except Exception as e:
-        logging.info(f"❌ 获取最新哈希文件路径失败: {e}")
+        logger.info(f"❌ 获取最新哈希文件路径失败: {e}")
         return None
 
 def process_artist_folder(folder_path: Path, workers: int = 4, force_update: bool = False) -> Optional[str]:
@@ -61,7 +60,7 @@ def process_artist_folder(folder_path: Path, workers: int = 4, force_update: boo
         if force_update:
             cmd += " --force"
             
-        logging.info(f"[#process_log]执行哈希预热命令: {cmd}")
+        logger.info(f"[#process_log]执行哈希预热命令: {cmd}")
         
         # 执行命令
         process = subprocess.run(
@@ -76,26 +75,26 @@ def process_artist_folder(folder_path: Path, workers: int = 4, force_update: boo
             # 获取最新的哈希文件路径
             hash_file = get_latest_hash_file_path()
             if hash_file:
-                logging.info(f"[#update_log]✅ 找到哈希文件: {hash_file}")
+                logger.info(f"[#update_log]✅ 找到哈希文件: {hash_file}")
                 return hash_file
             else:
-                logging.info("[#process_log]❌ 未能获取最新的哈希文件路径")
+                logger.info("[#process_log]❌ 未能获取最新的哈希文件路径")
                 
         elif process.returncode == 1:
-            logging.info("[#process_log]❌ 没有找到需要处理的文件")
+            logger.info("[#process_log]❌ 没有找到需要处理的文件")
         elif process.returncode == 2:
-            logging.info("[#process_log]❌ 输入路径不存在")
+            logger.info("[#process_log]❌ 输入路径不存在")
         elif process.returncode == 3:
-            logging.info("[#process_log]❌ 处理过程出错")
+            logger.info("[#process_log]❌ 处理过程出错")
         else:
-            logging.info(f"[#process_log]❌ 未知错误，退出码: {process.returncode}")
+            logger.info(f"[#process_log]❌ 未知错误，退出码: {process.returncode}")
             
         return None
             
     except subprocess.TimeoutExpired:
-        logging.info("[#process_log]❌ 哈希预处理超时（1小时）")
+        logger.info("[#process_log]❌ 哈希预处理超时（1小时）")
     except Exception as e:
-        logging.info(f"[#process_log]❌ 处理画师文件夹时出错: {str(e)}")
+        logger.info(f"[#process_log]❌ 处理画师文件夹时出错: {str(e)}")
     return None
 
 def process_duplicates(hash_file: str, target_paths: list[str], params: dict = None, worker_count: int = 2):
@@ -135,7 +134,7 @@ def process_duplicates(hash_file: str, target_paths: list[str], params: dict = N
         for path in target_paths:
             cmd += f' "{path}"'
             
-        logging.info(f"[#process_log]执行去重复命令: {cmd}")
+        logger.info(f"[#process_log]执行去重复命令: {cmd}")
         
         # 执行命令
         process = subprocess.run(
@@ -147,13 +146,13 @@ def process_duplicates(hash_file: str, target_paths: list[str], params: dict = N
         
         # 根据返回码处理结果
         if process.returncode == 0:
-            logging.info("[#update_log]✅ 去重复完成")
+            logger.info("[#update_log]✅ 去重复完成")
         else:
-            logging.info(f"[#process_log]❌ 去重复失败，返回码: {process.returncode}")
+            logger.info(f"[#process_log]❌ 去重复失败，返回码: {process.returncode}")
             
     except subprocess.TimeoutExpired:
-        logging.info("[#process_log]❌ 去重复处理超时（1小时）")
+        logger.info("[#process_log]❌ 去重复处理超时（1小时）")
     except Exception as e:
-        logging.info(f"[#process_log]❌ 处理重复文件时出错: {e}")
+        logger.info(f"[#process_log]❌ 处理重复文件时出错: {e}")
 if __name__ == '__main__':
     print(PROJECT_ROOT,PYTHON_EXECUTABLE)

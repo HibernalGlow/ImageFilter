@@ -6,7 +6,6 @@ import argparse
 import subprocess
 from pathlib import Path
 from typing import Optional, List
-import logging
 from datetime import datetime
 # 添加TextualLogger导入
 
@@ -145,7 +144,7 @@ def get_artist_folder_from_path(path: Path) -> Optional[Path]:
         while current_path != current_path.parent:
             if is_artist_folder(current_path):
                 if current_path.exists():
-                    logging.info(f'✅ 找到画师文件夹: {current_path}')
+                    logger.info(f'✅ 找到画师文件夹: {current_path}')
                     confirm = input('是否使用该画师文件夹？(Y/n/输入新路径): ').strip()
                     if not confirm or confirm.lower() == 'y':
                         return current_path
@@ -156,10 +155,10 @@ def get_artist_folder_from_path(path: Path) -> Optional[Path]:
                         if is_artist_folder(new_path):
                             return new_path
                         else:
-                            logging.info('❌ 输入的路径不是画师文件夹（需要包含[]标记）')
+                            logger.info('❌ 输入的路径不是画师文件夹（需要包含[]标记）')
                             break
                     else:
-                        logging.info('❌ 输入的路径不存在')
+                        logger.info('❌ 输入的路径不存在')
                         break
             current_path = current_path.parent
         
@@ -170,11 +169,11 @@ def get_artist_folder_from_path(path: Path) -> Optional[Path]:
                 artist_folders.append(entry)
                     
         if not artist_folders:
-            logging.info(f'❌ 在路径 {base_path} 下未找到画师文件夹')
+            logger.info(f'❌ 在路径 {base_path} 下未找到画师文件夹')
             return None
             
         if len(artist_folders) == 1:
-            logging.info(f'✅ 找到画师文件夹: {artist_folders[0]}')
+            logger.info(f'✅ 找到画师文件夹: {artist_folders[0]}')
             confirm = input('是否使用该画师文件夹？(Y/n/输入新路径): ').strip()
             if not confirm or confirm.lower() == 'y':
                 return artist_folders[0]
@@ -185,15 +184,15 @@ def get_artist_folder_from_path(path: Path) -> Optional[Path]:
                 if is_artist_folder(new_path):
                     return new_path
                 else:
-                    logging.info('❌ 输入的路径不是画师文件夹（需要包含[]标记）')
+                    logger.info('❌ 输入的路径不是画师文件夹（需要包含[]标记）')
                     return None
             else:
-                logging.info('❌ 输入的路径不存在')
+                logger.info('❌ 输入的路径不存在')
                 return None
             
-        logging.info("\n找到以下画师文件夹:")
+        logger.info("\n找到以下画师文件夹:")
         for i, folder in enumerate(artist_folders, 1):
-            logging.info(f"{i}. {folder}")
+            logger.info(f"{i}. {folder}")
             
         # 让用户选择或输入新路径
         while True:
@@ -209,7 +208,7 @@ def get_artist_folder_from_path(path: Path) -> Optional[Path]:
                 if is_artist_folder(new_path):
                     return new_path
                 else:
-                    logging.info('❌ 输入的路径不是画师文件夹（需要包含[]标记）')
+                    logger.info('❌ 输入的路径不是画师文件夹（需要包含[]标记）')
                     continue
                     
             # 如果输入的是编号
@@ -217,7 +216,7 @@ def get_artist_folder_from_path(path: Path) -> Optional[Path]:
                 index = int(choice) - 1
                 if 0 <= index < len(artist_folders):
                     folder = artist_folders[index]
-                    logging.info(f'✅ 已选择: {folder}')
+                    logger.info(f'✅ 已选择: {folder}')
                     confirm = input('是否使用该画师文件夹？(Y/n/输入新路径): ').strip()
                     if not confirm or confirm.lower() == 'y':
                         return folder
@@ -228,17 +227,17 @@ def get_artist_folder_from_path(path: Path) -> Optional[Path]:
                         if is_artist_folder(new_path):
                             return new_path
                         else:
-                            logging.info('❌ 输入的路径不是画师文件夹（需要包含[]标记）')
+                            logger.info('❌ 输入的路径不是画师文件夹（需要包含[]标记）')
                             continue
                     else:
-                        logging.info('❌ 输入的路径不存在')
+                        logger.info('❌ 输入的路径不存在')
                         continue
-                logging.info('❌ 无效的选择，请重试')
+                logger.info('❌ 无效的选择，请重试')
             except ValueError:
-                logging.info('❌ 请输入有效的数字或路径')
+                logger.info('❌ 请输入有效的数字或路径')
                 
     except Exception as e:
-        logging.info(f'❌ 获取画师文件夹时出错: {e}')
+        logger.info(f'❌ 获取画师文件夹时出错: {e}')
         return None
 
 def process_single_path(path: Path, workers: int = 4, force_update: bool = False, params: dict = None) -> bool:
@@ -254,31 +253,31 @@ def process_single_path(path: Path, workers: int = 4, force_update: bool = False
         bool: 是否处理成功
     """
     try:
-        logging.info(f"[#process_log]\n🔄 处理路径: {path}")
+        logger.info(f"[#process_log]\n🔄 处理路径: {path}")
         
         # 获取画师文件夹
         artist_folder = get_artist_folder_from_path(path)
         if not artist_folder:
             return False
             
-        logging.info(f"[#update_log]✅ 使用画师文件夹: {artist_folder}")
+        logger.info(f"[#update_log]✅ 使用画师文件夹: {artist_folder}")
         
         # 处理画师文件夹，生成哈希文件
         hash_file = process_artist_folder(artist_folder, workers, force_update)
         if not hash_file:
             return False
             
-        logging.info(f"[#update_log]✅ 生成哈希文件: {hash_file}")
+        logger.info(f"[#update_log]✅ 生成哈希文件: {hash_file}")
         
         # 处理重复文件
-        logging.info(f"[#process_log]\n🔄 处理重复文件 {path}")
+        logger.info(f"[#process_log]\n🔄 处理重复文件 {path}")
         process_duplicates(hash_file, [str(path)], params, workers)
         
-        logging.info(f"[#update_log]✅ 处理完成: {path}")
+        logger.info(f"[#update_log]✅ 处理完成: {path}")
         return True
         
     except Exception as e:
-        logging.info(f"[#process_log]❌ 处理路径时出错: {path}: {e}")
+        logger.info(f"[#process_log]❌ 处理路径时出错: {path}: {e}")
         return False
 
 def find_artist_folders_for_path(path: Path) -> List[Path]:
@@ -337,12 +336,12 @@ def batch_get_artist_folders(paths: List[str]) -> dict:
     # 首先收集所有路径可能的画师文件夹
     for path in paths:
         if not os.path.exists(path):
-            logging.info(f"❌ 路径不存在: {path}")
+            logger.info(f"❌ 路径不存在: {path}")
             continue
             
         folders = find_artist_folders_for_path(Path(path))
         if not folders:
-            logging.info(f"❌ 未找到画师文件夹: {path}")
+            logger.info(f"❌ 未找到画师文件夹: {path}")
             continue
             
         path_to_folders[path] = folders
@@ -375,13 +374,13 @@ def batch_get_artist_folders(paths: List[str]) -> dict:
                 folders = path_to_folders[path]
                 if 1 <= folder_idx <= len(folders):
                     path_to_selected[path] = folders[folder_idx - 1]
-                    logging.info(f"✅ 已更新: {path} -> {folders[folder_idx - 1]}")
+                    logger.info(f"✅ 已更新: {path} -> {folders[folder_idx - 1]}")
                 else:
-                    logging.info("❌ 无效的画师文件夹序号")
+                    logger.info("❌ 无效的画师文件夹序号")
             else:
-                logging.info("❌ 无效的路径序号")
+                logger.info("❌ 无效的路径序号")
         except ValueError:
-            logging.info("❌ 输入格式错误，请使用'序号 画师文件夹序号'的格式")
+            logger.info("❌ 输入格式错误，请使用'序号 画师文件夹序号'的格式")
     
     return path_to_selected
 
@@ -415,20 +414,20 @@ def main():
     params = DEFAULT_PARAMS.copy()
     
     for i, (path, artist_folder) in enumerate(path_to_artist.items(), 1):
-        logging.info(f"[#process_log]\n=== 处理第 {i}/{total_count} 个路径 ===")
-        logging.info(f"[#process_log]路径: {path}")
-        logging.info(f"[#process_log]画师文件夹: {artist_folder}")
+        logger.info(f"[#process_log]\n=== 处理第 {i}/{total_count} 个路径 ===")
+        logger.info(f"[#process_log]路径: {path}")
+        logger.info(f"[#process_log]画师文件夹: {artist_folder}")
         
         # 更新进度
         progress = int((i - 1) / total_count * 100)
-        logging.debug(f"[#current_progress]当前进度: [{('=' * int(progress/5))}] {progress}%")
-        logging.info(f"[#current_stats]总路径数: {total_count} 已处理: {i-1} 成功: {success_count} 总进度: [{('=' * int(progress/5))}] {progress}%")
+        logger.debug(f"[#current_progress]当前进度: [{('=' * int(progress/5))}] {progress}%")
+        logger.info(f"[#current_stats]总路径数: {total_count} 已处理: {i-1} 成功: {success_count} 总进度: [{('=' * int(progress/5))}] {progress}%")
         
         # 处理画师文件夹，生成哈希文件
         hash_file = process_artist_folder(artist_folder, WORKER_COUNT, FORCE_UPDATE)
         if not hash_file:
             # 更新失败状态
-            logging.info(f"[#current_stats]总路径数: {total_count} 已处理: {i} 成功: {success_count} 总进度: [{('=' * int(progress/5))}] {progress}%")
+            logger.info(f"[#current_stats]总路径数: {total_count} 已处理: {i} 成功: {success_count} 总进度: [{('=' * int(progress/5))}] {progress}%")
             continue
             
         # 处理重复文件
@@ -437,10 +436,10 @@ def main():
         
         # 更新最终进度
         progress = int(i / total_count * 100)
-        logging.debug(f"[#current_progress]当前进度: [{('=' * int(progress/5))}] {progress}%")
-        logging.info(f"[#current_stats]总路径数: {total_count}\n已处理: {i}\n成功: {success_count}\n总进度: [{('=' * int(progress/5))}] {progress}%")
+        logger.debug(f"[#current_progress]当前进度: [{('=' * int(progress/5))}] {progress}%")
+        logger.info(f"[#current_stats]总路径数: {total_count}\n已处理: {i}\n成功: {success_count}\n总进度: [{('=' * int(progress/5))}] {progress}%")
             
-    logging.info(f"[#update_log]\n✅ 所有处理完成: 成功 {success_count}/{total_count}")
+    logger.info(f"[#update_log]\n✅ 所有处理完成: 成功 {success_count}/{total_count}")
 
 if __name__ == "__main__":
     main() 

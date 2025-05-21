@@ -8,7 +8,6 @@ import pillow_avif
 import pillow_jxl
 import cv2
 import numpy as np
-import logging
 from io import BytesIO
 from pathlib import Path
 import imagehash
@@ -16,7 +15,6 @@ from itertools import combinations
 from rich.markdown import Markdown
 from rich.console import Console
 from datetime import datetime
-
 import orjson
 import os
 from urllib.parse import quote, unquote, urlparse

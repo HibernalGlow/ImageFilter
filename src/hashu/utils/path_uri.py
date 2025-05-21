@@ -1,10 +1,9 @@
 """URI 路径处理模块"""
 from pathlib import Path
-import logging
 from typing import Tuple, Optional
 from urllib.parse import unquote
 import os
-
+from loguru import logger
 
 class PathURIGenerator:
     @staticmethod
@@ -100,7 +99,7 @@ class PathURIGenerator:
             raise ValueError("未知的URI协议类型")
             
         except Exception as e:
-            logging.error(f"URI解析失败: {uri} - {str(e)}")
+            logger.error(f"URI解析失败: {uri} - {str(e)}")
             return uri, None  # 返回原始URI作为降级处理
 
 

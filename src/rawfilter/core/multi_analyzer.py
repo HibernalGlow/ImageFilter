@@ -5,8 +5,7 @@ Multi文件分析器模块
 """
 
 import os
-import logging
-from typing import List, Dict, Tuple, Union, Optional
+from typing import List, Dict, Tuple, Union, Optional, Annotated
 from pathlib import Path
 import zipfile
 from PIL import Image, ImageFile
@@ -19,14 +18,14 @@ from io import BytesIO
 import random
 from concurrent.futures import ThreadPoolExecutor
 from hashu.core.calculate_hash_custom import ImageClarityEvaluator
-from ..number_shortener import shorten_number_cn
+from .number_shortener import shorten_number_cn
 import re
 from rawfilter.core.group_analyzer import GroupAnalyzer
-import argparse
 import json
 import sys
-from nodes.tui.mode_manager import create_mode_manager
 import pyperclip
+import typer
+from typing_extensions import Annotated
 
 # 抑制所有警告
 warnings.filterwarnings('ignore')
@@ -35,8 +34,7 @@ ImageFile.LOAD_TRUNCATED_IMAGES = True
 # 设置OpenCV的错误处理
  # 限制OpenCV线程数
  # 只显示错误日志
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 class MultiAnalyzer:
     """Multi文件分析器，用于分析压缩包中图片的宽度、页数和清晰度"""
@@ -515,18 +513,6 @@ class MultiAnalyzer:
                     
         return results
 
-def setup_cli_parser():
-    """设置命令行参数解析器"""
-    parser = argparse.ArgumentParser(description='Multi文件分析器')
-    group = parser.add_mutually_exclusive_group()
-    group.add_argument('-c', '--clipboard', action='store_true', help='从剪贴板读取路径')
-    group.add_argument('input_path', nargs='?', help='输入文件或目录路径')
-    parser.add_argument('-s', '--sample-count', type=int, default=3, help='每个压缩包抽取的图片样本数量（默认3）')
-    parser.add_argument('-r', '--rename', action='store_true', help='执行重命名操作')
-    parser.add_argument('--no-skip-special', action='store_true', help='不跳过trash和multi目录')
-    parser.add_argument('-o', '--output', help='保存结果的文件路径')
-    return parser
-
 def get_paths_from_clipboard():
     """从剪贴板读取多行路径"""
     try:
@@ -557,6 +543,119 @@ def get_paths_from_clipboard():
     except Exception as e:
         logger.info("[#error_log] ❌ 读取剪贴板时出错: %s", e)
         return []
+
+def main():
+    """主函数，用于命令行运行"""
+    app = typer.Typer(help="Multi文件分析器")
+    
+    # 创建预设配置
+    preset_configs = {
+        "标准分析": {
+            "description": "标准分析配置",
+            "checkbox_options": ["--rename"],
+            "input_values": {
+                "--sample-count": "3",
+                "--output": "analysis_result.json"
+            }
+        },
+        "完整分析": {
+            "description": "分析所有目录（包括trash和multi）",
+            "checkbox_options": ["--rename", "--no-skip-special"],
+            "input_values": {
+                "--sample-count": "3",
+                "--output": "analysis_result.json"
+            }
+        },
+        "剪贴板模式": {
+            "description": "从剪贴板读取路径",
+            "checkbox_options": ["--rename", "--clipboard"],
+            "input_values": {
+                "--sample-count": "3",
+                "--output": "analysis_result.json"
+            }
+        },
+        "完整剪贴板模式": {
+            "description": "从剪贴板读取路径，分析所有目录",
+            "checkbox_options": ["--rename", "--clipboard", "--no-skip-special"],
+            "input_values": {
+                "--sample-count": "3",
+                "--output": "analysis_result.json"
+            }
+        }
+    }
+    
+    @app.command()
+    def analyze(
+        input_path: Annotated[Optional[str], typer.Argument(help="输入文件或目录路径")] = None,
+        clipboard: Annotated[bool, typer.Option("--clipboard", "-c", help="从剪贴板读取路径")] = False,
+        sample_count: Annotated[int, typer.Option("--sample-count", "-s", help="每个压缩包抽取的图片样本数量")] = 3,
+        rename: Annotated[bool, typer.Option("--rename", "-r", help="执行重命名操作")] = False,
+        no_skip_special: Annotated[bool, typer.Option("--no-skip-special", help="不跳过trash和multi目录")] = False,
+        output: Annotated[Optional[str], typer.Option("--output", "-o", help="保存结果的文件路径")] = None
+    ):
+        """分析压缩包文件的宽度、页数和清晰度"""
+        # 创建一个类似于argparse命名空间的对象，以便与run_application兼容
+        class Args:
+            pass
+            
+        args = Args()
+        args.input_path = input_path
+        args.clipboard = clipboard
+        args.sample_count = sample_count
+        args.rename = rename
+        args.no_skip_special = no_skip_special
+        args.output = output
+        
+        run_application(args)
+    
+    # 检查是否有命令行参数
+    if len(sys.argv) > 1:
+        # 如果有命令行参数，直接运行Typer应用
+        app()
+    else:
+        # 使用rich_preset配置界面
+        try:
+            from rich_preset import create_config_app
+            
+            result = create_config_app(
+                program=sys.argv[0],
+                title="Multi文件分析器配置",
+                command={
+                    "name": "analyze",  # 对应@app.command()下的函数名
+                    "help": "分析压缩包文件的宽度、页数和清晰度"
+                },
+                options=[
+                    {"name": "--clipboard", "flag": "-c", "help": "从剪贴板读取路径", "is_flag": True},
+                    {"name": "--sample-count", "flag": "-s", "help": "每个压缩包抽取的图片样本数量", "type": int, "default": 3},
+                    {"name": "--rename", "flag": "-r", "help": "执行重命名操作", "is_flag": True},
+                    {"name": "--no-skip-special", "help": "不跳过trash和multi目录", "is_flag": True},
+                    {"name": "--output", "flag": "-o", "help": "保存结果的文件路径"}
+                ],
+                arguments=[
+                    {"name": "input_path", "help": "输入文件或目录路径", "required": False}
+                ],
+                preset_configs=preset_configs
+            )
+            
+            if result:
+                # 将rich_preset的结果转换为兼容run_application的格式
+                class Args:
+                    pass
+                
+                args = Args()
+                args.input_path = result.args.get("input_path")
+                args.clipboard = result.args.get("clipboard", False)
+                args.sample_count = result.args.get("sample_count", 3)
+                args.rename = result.args.get("rename", False)
+                args.no_skip_special = result.args.get("no_skip_special", False)
+                args.output = result.args.get("output")
+                
+                run_application(args)
+            else:
+                print("操作已取消")
+        except ImportError:
+            print("未安装rich_preset模块，将使用命令行模式")
+            app()
 
 def run_application(args):
     """运行应用程序"""
@@ -612,107 +711,114 @@ def main():
     """主函数，用于命令行运行"""
     # 获取配置文件路径
     config_path = os.path.join(os.path.dirname(__file__), 'multi_analyzer_config.json')
-    
-    # 创建配置
-    config = {
-        'tui_config': {
-            'title': 'Multi文件分析器配置',
-            'checkbox_options': [
-                ('执行重命名操作', 'rename', '--rename', False),
-                ('不跳过trash和multi目录', 'skip_special', '--no-skip-special', False),
-                ('从剪贴板读取路径', 'clipboard', '--clipboard', False)
-            ],
-            'input_options': [
-                ('采样数量', 'sample_count', '--sample-count', '3', '每个压缩包抽取的图片样本数量'),
-                ('结果保存路径', 'output', '--output', 'analysis_result.json', '分析结果保存的JSON文件路径'),
-                ('输入路径', 'input_path', 'input_path', '', '要分析的文件或目录路径（不使用剪贴板时需要）')
-            ],
-            'preset_configs': {
-                '标准分析': {
-                    'description': '标准分析配置',
-                    'checkbox_options': ['rename'],
-                    'input_values': {
-                        'sample_count': '3',
-                        'output': 'analysis_result.json',
-                        'input_path': ''
-                    }
-                },
-                '完整分析': {
-                    'description': '分析所有目录（包括trash和multi）',
-                    'checkbox_options': ['rename', 'skip_special'],
-                    'input_values': {
-                        'sample_count': '3',
-                        'output': 'analysis_result.json',
-                        'input_path': ''
-                    }
-                }
+      # 创建预设配置
+    preset_configs = {
+        "标准分析": {
+            "description": "标准分析配置",
+            "checkbox_options": ["--rename"],
+            "input_values": {
+                "--sample-count": "3",
+                "--output": "analysis_result.json"
             }
         },
-        'debug_config': {
-            'base_modes': {
-                '1': {
-                    'name': '标准分析模式（从剪贴板读取）',
-                    'base_args': ['--sample-count', '3', '--clipboard', '--rename'],
-                    'default_params': {}
-                },
-                '2': {
-                    'name': '标准分析模式（手动输入路径）',
-                    'base_args': ['--sample-count', '3', '--rename'],
-                    'default_params': {}
-                },
-                '3': {
-                    'name': '完整分析模式（从剪贴板读取）',
-                    'base_args': ['--sample-count', '3', '--no-skip-special', '--clipboard', '--rename'],
-                    'default_params': {}
-                },
-                '4': {
-                    'name': '完整分析模式（手动输入路径）',
-                    'base_args': ['--sample-count', '3', '--no-skip-special', '--rename'],
-                    'default_params': {}
-                }
-            },
-            'param_options': {
-                'input_path': {
-                    'prompt': '请输入要处理的路径: ',
-                    'required': True
-                }
+        "完整分析": {
+            "description": "分析所有目录（包括trash和multi）",
+            "checkbox_options": ["--rename", "--no-skip-special"],
+            "input_values": {
+                "--sample-count": "3",
+                "--output": "analysis_result.json"
+            }
+        },
+        "剪贴板模式": {
+            "description": "从剪贴板读取路径",
+            "checkbox_options": ["--rename", "--clipboard"],
+            "input_values": {
+                "--sample-count": "3",
+                "--output": "analysis_result.json"
+            }
+        },
+        "完整剪贴板模式": {
+            "description": "从剪贴板读取路径，分析所有目录",
+            "checkbox_options": ["--rename", "--clipboard", "--no-skip-special"],
+            "input_values": {
+                "--sample-count": "3",
+                "--output": "analysis_result.json"
             }
         }
     }
-
-    # 创建模式管理器
-    mode_manager = create_mode_manager(
-        config=config,
-        cli_parser_setup=setup_cli_parser,
-        application_runner=run_application
-    )
-
-    # 根据命令行参数选择运行模式
-    if len(sys.argv) > 1:
-        # 如果有命令行参数，直接运行CLI模式
-        mode_manager.run_cli(sys.argv[1:])
-    else:
-        # 否则显示模式选择菜单
-        print("\n=== 运行模式选择 ===")
-        print("1. TUI界面模式")
-        print("2. 调试模式")
-        print("3. 命令行模式")
+    
+    @app.command()
+    def analyze(
+        input_path: Annotated[Optional[str], typer.Argument(help="输入文件或目录路径")] = None,
+        clipboard: Annotated[bool, typer.Option("--clipboard", "-c", help="从剪贴板读取路径")] = False,
+        sample_count: Annotated[int, typer.Option("--sample-count", "-s", help="每个压缩包抽取的图片样本数量")] = 3,
+        rename: Annotated[bool, typer.Option("--rename", "-r", help="执行重命名操作")] = False,
+        no_skip_special: Annotated[bool, typer.Option("--no-skip-special", help="不跳过trash和multi目录")] = False,
+        output: Annotated[Optional[str], typer.Option("--output", "-o", help="保存结果的文件路径")] = None
+    ):
+        """分析压缩包文件的宽度、页数和清晰度"""
+        # 创建一个类似于argparse命名空间的对象，以便与run_application兼容
+        class Args:
+            pass
+            
+        args = Args()
+        args.input_path = input_path
+        args.clipboard = clipboard
+        args.sample_count = sample_count
+        args.rename = rename
+        args.no_skip_special = no_skip_special
+        args.output = output
         
+        run_application(args)
+    
+    # 检查是否有命令行参数
+    if len(sys.argv) > 1:
+        # 如果有命令行参数，直接运行Typer应用
+        app()
+    else:
+        # 使用rich_preset配置界面
         try:
-            # choice = input("\n请选择运行模式 (1-3): ").strip()
-            choice = "2"
-            if choice == "1":
-                mode_manager.run_tui()
-            elif choice == "2":
-                mode_manager.run_debug()
-            elif choice == "3":
-                mode_manager.run_cli()
+            from rich_preset import create_config_app
+            
+            result = create_config_app(
+                program=sys.argv[0],
+                title="Multi文件分析器配置",
+                command={
+                    "name": "analyze",  # 对应@app.command()下的函数名
+                    "help": "分析压缩包文件的宽度、页数和清晰度"
+                },
+                options=[
+                    {"name": "--clipboard", "flag": "-c", "help": "从剪贴板读取路径", "is_flag": True},
+                    {"name": "--sample-count", "flag": "-s", "help": "每个压缩包抽取的图片样本数量", "type": int, "default": 3},
+                    {"name": "--rename", "flag": "-r", "help": "执行重命名操作", "is_flag": True},
+                    {"name": "--no-skip-special", "help": "不跳过trash和multi目录", "is_flag": True},
+                    {"name": "--output", "flag": "-o", "help": "保存结果的文件路径"}
+                ],
+                arguments=[
+                    {"name": "input_path", "help": "输入文件或目录路径", "required": False}
+                ],
+                preset_configs=preset_configs
+            )
+            
+            if result:
+                # 将rich_preset的结果转换为兼容run_application的格式
+                class Args:
+                    pass
+                
+                args = Args()
+                args.input_path = result.args.get("input_path")
+                args.clipboard = result.args.get("clipboard", False)
+                args.sample_count = result.args.get("sample_count", 3)
+                args.rename = result.args.get("rename", False)
+                args.no_skip_special = result.args.get("no_skip_special", False)
+                args.output = result.args.get("output")
+                
+                run_application(args)
             else:
-                print("无效的选择，退出程序")
-        except KeyboardInterrupt:
-            print("\n用户取消操作")
-        except Exception as e:
-            print(f"运行出错: {e}")
+                print("操作已取消")
+        except ImportError:
+            print("未安装rich_preset模块，将使用命令行模式")
+            app()
 
 if __name__ == '__main__':
-    main() 
+    main()

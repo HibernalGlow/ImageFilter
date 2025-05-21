@@ -1,17 +1,15 @@
 import os
 import sys
 import argparse
-import logging
 from pathlib import Path
 from typing import Dict, Any, List, Set, Tuple, Optional
 from common.archive import ArchiveHandler,SUPPORTED_ARCHIVE_FORMATS
 from common.input import InputHandler
 from textual_preset import create_config_app
-from .utils.merge import ArchiveMerger
+from batchfilter.utils.merge import ArchiveMerger
 from textual_logger import TextualLoggerManager
 import shutil
 import time
-import logging
 import subprocess
 from pathlib import Path
 from typing import List, Tuple, Optional

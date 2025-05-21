@@ -4,11 +4,10 @@ import numpy as np
 from PIL import Image
 import pillow_avif
 import pillow_jxl
-import logging
 from pathlib import Path
 from typing import Dict, List, Union, Tuple
 from io import BytesIO
-
+from loguru import logger
 class ImageClarityEvaluator:
     """图像清晰度评估类"""
     
@@ -27,7 +26,7 @@ class ImageClarityEvaluator:
                 score = ImageClarityEvaluator.calculate_definition(path)
                 scores[str(path)] = score
             except Exception as e:
-                logging.warning(f"清晰度评估失败 {path}: {str(e)}")
+                logger.warning(f"清晰度评估失败 {path}: {str(e)}")
                 scores[str(path)] = 0.0
         return scores
 
@@ -38,7 +37,7 @@ class ImageClarityEvaluator:
             with Image.open(image_path) as img:
                 return img.size  # (width, height)
         except Exception as e:
-            logging.error(f"获取图片尺寸失败 {image_path}: {str(e)}")
+            logger.error(f"获取图片尺寸失败 {image_path}: {str(e)}")
             return (0, 0)
 
     @staticmethod
@@ -72,6 +71,6 @@ class ImageClarityEvaluator:
             return round(np.mean(energy))  # 新增round取整
 
         except Exception as e:
-            logging.error(f"清晰度计算失败: {str(e)}")
+            logger.error(f"清晰度计算失败: {str(e)}")
             return 0
 

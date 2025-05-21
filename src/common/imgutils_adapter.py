@@ -4,7 +4,6 @@ imgutils 适配器模块 - 提供 imgutils 库的集成接口
 此模块封装了 imgutils 库提供的图像处理功能，使其易于在现有项目中使用。
 """
 import os
-import logging
 from typing import Dict, List, Tuple, Optional, Union, Any
 from pathlib import Path
 import numpy as np
@@ -20,8 +19,7 @@ from imgutils.segment import segment_rgba_with_isnetis
 from imgutils.edge import detect_edge
 
 # 创建日志记录器
-logger = logging.getLogger(__name__)
-
+from loguru import logger
 class ImgUtilsAdapter:
     """imgutils 库适配器，提供统一接口"""
     

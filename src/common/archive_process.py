@@ -1,11 +1,9 @@
 import os
 import shutil
 import subprocess
-import logging
 import time
 from typing import List, Set, Dict, Optional, Tuple
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 class ArchiveHandler:
     """压缩包处理类"""

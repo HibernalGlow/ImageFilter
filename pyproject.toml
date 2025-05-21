@@ -43,6 +43,9 @@ dependencies = [
     "imagehash",
     "regex",
     "orjson>=3.10.18",
+    "pywin32>=310",
+    "opencc>=1.1.9",
+    "typer>=0.15.4",
 ]
 
 [project.optional-dependencies]
@@ -63,6 +66,11 @@ dev = [
 imgfilter = "imgfilter.__main__:main"
 badzfilter = "badzfilter.__main__:main"
 hashu = "hashu.__main__:main"
+artfliter = "artfliter.__main__:main"
+rawfilter = "rawfilter.__main__:main"
+recruitfilter = "recruitfilter.__main__:main"
+textfilter = "textfilter.__main__:main"
+widthfilter = "widthfilter.__main__:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 

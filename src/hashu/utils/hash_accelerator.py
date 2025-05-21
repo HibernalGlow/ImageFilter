@@ -1,7 +1,6 @@
 import numpy as np
 from typing import List, Tuple, Dict, Optional
-import logging
-
+from loguru import logger
 class HashAccelerator:
     """使用NumPy加速哈希计算和比较的类"""
     
@@ -25,7 +24,7 @@ class HashAccelerator:
             # 转换为NumPy数组
             return np.array([int(b) for b in bin_str], dtype=np.uint8)
         except Exception as e:
-            logging.error(f"转换哈希值失败: {e}")
+            logger.error(f"转换哈希值失败: {e}")
             return None
 
     @staticmethod
@@ -59,7 +58,7 @@ class HashAccelerator:
                     
             return hash_matrix
         except Exception as e:
-            logging.error(f"预处理哈希列表失败: {e}")
+            logger.error(f"预处理哈希列表失败: {e}")
             return np.array([])
 
     @staticmethod
@@ -89,7 +88,7 @@ class HashAccelerator:
             return distances
             
         except Exception as e:
-            logging.error(f"计算汉明距离失败: {e}")
+            logger.error(f"计算汉明距离失败: {e}")
             return np.array([])
 
     @staticmethod
@@ -126,7 +125,7 @@ class HashAccelerator:
             return results
             
         except Exception as e:
-            logging.error(f"查找相似哈希失败: {e}")
+            logger.error(f"查找相似哈希失败: {e}")
             return []
 
     @staticmethod
@@ -178,5 +177,5 @@ class HashAccelerator:
             return results
             
         except Exception as e:
-            logging.error(f"批量查找相似哈希失败: {e}")
+            logger.error(f"批量查找相似哈希失败: {e}")
             return {} 

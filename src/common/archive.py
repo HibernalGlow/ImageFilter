@@ -1,14 +1,12 @@
 import os
 import shutil
 import subprocess
-import logging
 import time
 from typing import List, Set, Dict, Optional, Tuple
 import pyperclip
 import zipfile
 import shutil
 import zipfile
-import logging
 from pathlib import Path
 from typing import Tuple, List, Optional, Dict, Any
 from concurrent.futures import ThreadPoolExecutor
@@ -20,11 +18,7 @@ from common.input import InputHandler
 # 全局变量定义
 SUPPORTED_ARCHIVE_FORMATS = ['.zip', '.rar', '.7z', '.cbz', '.cbr']
 
-# config = {
-#     'script_name': 'file_ops.archive_handler',
-#     'console_enabled': False
-# }
-# logger, config_info = setup_logger(config)
+from loguru import logger
 class ArchiveHandler:
 
     def list_archive_contents(archive_path: str, file_types: Set[str] = {'.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.avif', '.jxl', '.heic', '.heif'}) -> List[str]:
@@ -98,7 +92,7 @@ class ArchiveHandler:
                 for root, _, files in os.walk(path):
                     root_lower = root.lower()
                     if any(kw in root_lower for kw in self.blacklist_keywords):
-                        logging.info(f"跳过黑名单目录: {root}")
+                        logger.info(f"跳过黑名单目录: {root}")
                         continue
                         
                     for file in files:
@@ -107,16 +101,16 @@ class ArchiveHandler:
                             
                         zip_path = os.path.join(root, file)
                         if any(kw in os.path.basename(zip_path).lower() for kw in self.blacklist_keywords):
-                            logging.info(f"跳过黑名单文件: {os.path.basename(zip_path)}")
+                            logger.info(f"跳过黑名单文件: {os.path.basename(zip_path)}")
                             continue
                             
                         if not zipfile.is_zipfile(zip_path):
-                            logging.warning(f"跳过无效的ZIP文件: {zip_path}")
+                            logger.warning(f"跳过无效的ZIP文件: {zip_path}")
                             continue
                             
                         file_success, file_error, file_results = self.process_archive(zip_path, filter_params)
                         if not file_success:
-                            logging.warning(f"处理返回失败: {os.path.basename(zip_path)}, 原因: {file_error}")
+                            logger.warning(f"处理返回失败: {os.path.basename(zip_path)}, 原因: {file_error}")
                             error_msg = file_error
                         success = success and file_success
                         results.extend(file_results)
@@ -131,19 +125,19 @@ class ArchiveHandler:
                     
                 return self.process_archive(path, filter_params)
             else:
-                logging.warning(f"跳过非ZIP文件: {path}")
+                logger.warning(f"跳过非ZIP文件: {path}")
                 return False, "非ZIP文件", []
                 
             return success, error_msg, results
             
         except FileNotFoundError as e:
-            logging.error(f"路径不存在: {path}")
+            logger.error(f"路径不存在: {path}")
             return False, str(e), []
         except PermissionError as e:
-            logging.error(f"路径访问权限错误: {path}")
+            logger.error(f"路径访问权限错误: {path}")
             return False, str(e), []
         except Exception as e:
-            logging.error(f"处理过程出错: {path}: {str(e)}")
+            logger.error(f"处理过程出错: {path}: {str(e)}")
             return False, str(e), []
 
     def process_archive(self, archive_path: str, filter_params: Dict[str, Any] = None) -> Tuple[bool, str, List[str]]:
@@ -196,14 +190,14 @@ class ArchiveHandler:
         try:
             # 首先检查路径是否为文件
             if not os.path.isfile(archive_path):
-                logging.error(f"路径不是文件: {archive_path}")
+                logger.error(f"路径不是文件: {archive_path}")
                 return False
                 
             # 检查压缩包完整性
             with zipfile.ZipFile(archive_path, 'r') as zf:
                 return not zf.testzip()
         except Exception as e:
-            logging.error(f"检查压缩包完整性失败: {str(e)}")
+            logger.error(f"检查压缩包完整性失败: {str(e)}")
             return False
     
     def _prepare_environment(self, archive_path: str) -> Tuple[Optional[str], Optional[str]]:
@@ -227,13 +221,13 @@ class ArchiveHandler:
             if not is_merged_file:
                 backup_path = archive_path + '.bak'
                 shutil.copy2(archive_path, backup_path)
-                logging.info(f"创建备份: {backup_path}")
+                logger.info(f"创建备份: {backup_path}")
             else:
-                logging.info(f"跳过为临时合并文件创建备份: {archive_path}")
+                logger.info(f"跳过为临时合并文件创建备份: {archive_path}")
             
             return extract_dir, backup_path
         except Exception as e:
-            logging.error(f"准备环境失败: {str(e)}")
+            logger.error(f"准备环境失败: {str(e)}")
             return None, None
     
     def _extract_archive(self, archive_path: str, extract_path: str) -> bool:
@@ -259,10 +253,10 @@ class ArchiveHandler:
             result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='ignore')
             
             if result.returncode == 0:
-                logging.info(f"使用7z成功解压: {archive_path}")
+                logger.info(f"使用7z成功解压: {archive_path}")
                 return True
             else:
-                logging.warning(f"使用7z解压失败，尝试使用zipfile作为备选: {result.stderr}")
+                logger.warning(f"使用7z解压失败，尝试使用zipfile作为备选: {result.stderr}")
                 
             # 使用zipfile作为备选方案，尝试不同编码
             encodings = ['utf-8', 'cp932', 'shift_jis', 'euc_jp', 'cp437']
@@ -285,18 +279,18 @@ class ArchiveHandler:
                             except:
                                 continue
                     
-                    logging.info(f"使用zipfile成功解压（编码：{encoding}）: {archive_path}")
+                    logger.info(f"使用zipfile成功解压（编码：{encoding}）: {archive_path}")
                     return True
                         
                 except Exception as e:
-                    logging.debug(f"使用编码 {encoding} 解压失败: {e}")
+                    logger.debug(f"使用编码 {encoding} 解压失败: {e}")
                     continue
             
-            logging.error("所有编码尝试均失败")
+            logger.error("所有编码尝试均失败")
             return False
                 
         except Exception as e:
-            logging.error(f"解压失败: {str(e)}")
+            logger.error(f"解压失败: {str(e)}")
             return False
     
     def _process_images(self, directory: str, archive_path: str, filter_params: Dict[str, Any]) -> List[str]:
@@ -358,10 +352,10 @@ class ArchiveHandler:
                     filter_params.get('config')  # 传入配置信息
                 )
                 if not success:
-                    logging.error(f"删除文件失败: {error}")
+                    logger.error(f"删除文件失败: {error}")
                     
         except Exception as e:
-            logging.error(f"处理图片失败: {str(e)}")
+            logger.error(f"处理图片失败: {str(e)}")
             
         return results
     
@@ -380,7 +374,7 @@ class ArchiveHandler:
             if temp_dir and os.path.exists(temp_dir):
                 shutil.rmtree(temp_dir)
         except Exception as e:
-            logging.error(f"清理临时文件失败: {str(e)}")
+            logger.error(f"清理临时文件失败: {str(e)}")
         
     """通用输入处理类"""
 

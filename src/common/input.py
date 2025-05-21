@@ -1,18 +1,12 @@
 import os
 from typing import List, Set, Dict, Optional, Tuple
 import pyperclip
-import logging
 from pathlib import Path
 from typing import Tuple, List, Optional, Dict, Any
 from loguru import logger
 # 全局变量定义
 SUPPORTED_ARCHIVE_FORMATS = ['.zip', '.rar', '.7z', '.cbz', '.cbr']
 
-# config = {
-#     'script_name': 'file_ops.archive_handler',
-#     'console_enabled': False
-# }
-# logger, config_info = setup_logger(config)
 class InputHandler:
     """通用输入处理类"""
     
