@@ -6,7 +6,7 @@ imgfilter 检测器配置模板
 [detectors]
 # 可用值: "default", "deepghs"
 # 灰度图检测器配置
-grayscale = "default"  
+grayscale = "deepghs"
 
 # 文本检测器配置
 text = "default"       

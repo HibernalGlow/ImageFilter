@@ -6,16 +6,18 @@ import logging
 from typing import List, Set, Dict, Tuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import multiprocessing
-from pathlib import Path
 from loguru import logger
 
-# 导入检测器工厂
-from imgfilter.detectors.factory import DetectorFactory
-
+from imgfilter.detectors.watermark import WatermarkDetector
+from imgfilter.detectors.text import CVTextImageDetector
+from imgfilter.detectors.duplicate import DuplicateImageDetector
+from imgfilter.detectors.small import SmallImageDetector
+# from imgfilter.detectors.gray.grayscale import GrayscaleImageDetector
+from imgfilter.deepghs.detectors.grayscale import GrayscaleImageDetector
 class ImageFilter:
     """图片过滤器，支持多种独立的过滤功能"""
     
-    def __init__(self, hash_file: str = None, hamming_threshold: int = 12, ref_hamming_threshold: int = None, max_workers: int = None, config_file: str = None):
+    def __init__(self, hash_file: str = None, hamming_threshold: int = 12, ref_hamming_threshold: int = None, max_workers: int = None):
         """
         初始化过滤器
         
@@ -24,60 +26,24 @@ class ImageFilter:
             hamming_threshold: 汉明距离阈值
             ref_hamming_threshold: 哈希文件过滤的汉明距离阈值，默认使用hamming_threshold
             max_workers: 最大工作线程数，默认为CPU核心数
-            config_file: 检测器配置文件路径，可以是JSON或TOML格式
         """
         self.hash_file = hash_file
         self.hamming_threshold = hamming_threshold
         self.ref_hamming_threshold = ref_hamming_threshold if ref_hamming_threshold is not None else hamming_threshold
+        self.watermark_detector = WatermarkDetector()
         
-        # 加载配置文件
-        if config_file:
-            self._load_config(config_file)
-        else:
-            # 默认配置文件路径
-            default_config_files = [
-                os.path.join(os.path.dirname(os.path.dirname(__file__)), "config", "detector_config.toml"),
-                os.path.join(os.path.dirname(os.path.dirname(__file__)), "config", "detector_config.json")
-            ]
-            
-            # 尝试加载默认配置文件
-            for cfg_file in default_config_files:
-                if os.path.exists(cfg_file):
-                    try:
-                        self._load_config(cfg_file)
-                        logger.info(f"[#cur_stats]已加载默认检测器配置: {cfg_file}")
-                        break
-                    except Exception as e:
-                        logger.error(f"[#update_log]❌ 加载默认配置文件失败: {str(e)}")
-                        
-        # 使用工厂创建检测器实例
-        self.watermark_detector = DetectorFactory.create_detector(DetectorFactory.WATERMARK)
-        self.text_detector = DetectorFactory.create_detector(DetectorFactory.TEXT)
-        self.duplicate_detector = DetectorFactory.create_detector(
-            DetectorFactory.DUPLICATE,
+        # 初始化各种检测器
+        self.text_detector = CVTextImageDetector()
+        self.duplicate_detector = DuplicateImageDetector(
             hash_file=hash_file, 
             hamming_threshold=hamming_threshold, 
             ref_hamming_threshold=ref_hamming_threshold,
             max_workers=max_workers
         )
-        self.small_image_detector = DetectorFactory.create_detector(DetectorFactory.SMALL)
-        self.grayscale_detector = DetectorFactory.create_detector(DetectorFactory.GRAYSCALE)
+        self.small_image_detector = SmallImageDetector()
+        self.grayscale_detector = GrayscaleImageDetector()
         
         self.max_workers = max_workers or multiprocessing.cpu_count()
-    
-    def _load_config(self, config_file: str):
-        """
-        加载检测器配置文件
-        
-        Args:
-            config_file: 配置文件路径，支持JSON和TOML格式
-        """
-        try:
-            DetectorFactory.configure_from_file(config_file)
-            logger.info(f"[#cur_stats]已加载检测器配置: {config_file}")
-        except Exception as e:
-            logger.error(f"[#update_log]❌ 加载配置文件失败: {str(e)}")
-            raise
         
     def process_images(
         self, 

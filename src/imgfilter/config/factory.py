@@ -2,18 +2,11 @@
 检测器工厂模块，用于动态切换不同实现的检测器
 """
 import os
-import json
 import toml
+import importlib
 from pathlib import Path
-from typing import Dict, Any, Type
+from typing import Dict, Any, Type, Optional, Callable
 
-# 导入所有可能的检测器
-from imgfilter.detectors.watermark import WatermarkDetector
-from imgfilter.detectors.text import CVTextImageDetector
-from imgfilter.detectors.duplicate import DuplicateImageDetector
-from imgfilter.detectors.small import SmallImageDetector
-from imgfilter.detectors.gray.grayscale import GrayscaleImageDetector as DefaultGrayscaleImageDetector
-from imgfilter.deepghs.detectors.grayscale import GrayscaleImageDetector as DeepGHSGrayscaleImageDetector
 
 class DetectorFactory:
     """检测器工厂类，负责创建和管理不同实现的检测器"""
@@ -29,18 +22,39 @@ class DetectorFactory:
     SOURCE_DEFAULT = "default"
     SOURCE_DEEPGHS = "deepghs"
     
-    # 检测器类型到实现的映射
-    _detector_map = {
+    # 检测器导入映射表，格式为: {detector_type: {source: import_path}}
+    _detector_import_map = {
         GRAYSCALE: {
-            SOURCE_DEFAULT: DefaultGrayscaleImageDetector,
-            SOURCE_DEEPGHS: DeepGHSGrayscaleImageDetector
+            SOURCE_DEFAULT: "imgfilter.detectors.gray.grayscale:GrayscaleImageDetector",
+            SOURCE_DEEPGHS: "imgfilter.deepghs.detectors.grayscale:GrayscaleImageDetector"
         },
-        # 其他检测器类型的映射可以按需添加
         TEXT: {
-            SOURCE_DEFAULT: CVTextImageDetector
+            SOURCE_DEFAULT: "imgfilter.detectors.text:CVTextImageDetector"
         },
         DUPLICATE: {
-            SOURCE_DEFAULT: DuplicateImageDetector
+            SOURCE_DEFAULT: "imgfilter.detectors.duplicate:DuplicateImageDetector"
+        },
+        SMALL: {
+            SOURCE_DEFAULT: "imgfilter.detectors.small:SmallImageDetector"
+        },
+        WATERMARK: {
+            SOURCE_DEFAULT: "imgfilter.detectors.watermark:WatermarkDetector"
+        }
+    }
+    
+    # 当前活跃的检测器源配置
+    _active_sources = {
+        GRAYSCALE: SOURCE_DEFAULT,
+        TEXT: SOURCE_DEFAULT,
+        DUPLICATE: SOURCE_DEFAULT,
+        SMALL: SOURCE_DEFAULT,
+        WATERMARK: SOURCE_DEFAULT
+    }
+    
+    # 检测器类缓存，避免重复导入
+    _detector_class_cache = {
+        GRAYSCALE: {
+            SOURCE_DEFAULT: GrayscaleImageDetector
         },
         SMALL: {
             SOURCE_DEFAULT: SmallImageDetector
