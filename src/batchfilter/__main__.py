@@ -641,7 +641,7 @@ class Application:
         # 运行配置界面
         app.run()
     
-    def main(self) -> int:
+    def run(self) -> int:
         """主函数入口
         
         Returns:
@@ -666,6 +666,9 @@ class Application:
             return 1
 
 # 主程序入口
-if __name__ == '__main__':
+def main():
     app = Application()
-    sys.exit(app.main())
+    sys.exit(app.run())
+
+if __name__ == '__main__':
+    main()
