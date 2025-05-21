@@ -3,6 +3,8 @@ import logging
 from typing import List, Dict, Tuple, Set, Union, Optional
 import json
 from PIL import Image
+import pillow_avif
+import pillow_jxl 
 from io import BytesIO
 import multiprocessing
 import mmap  # 添加 mmap 导入
@@ -10,17 +12,10 @@ import tempfile
 import shutil
 
 from regex import F
-from nodes.pics.hash.calculate_hash_custom import ImageHashCalculator, PathURIGenerator
-from nodes.hash.hash_accelerator import HashAccelerator
+from hashu.core.calculate_hash_custom import ImageHashCalculator, PathURIGenerator
+from hashu.utils.hash_accelerator import HashAccelerator
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from nodes.record.logger_config import setup_logger
-
-# config = {
-#     'script_name': 'pics.filter.duplicate_image_detector',
-#     'console_enabled': False
-# }
-# logger, config_info = setup_logger(config)
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 class DuplicateImageDetector:
     """重复图片检测器，支持多种检测策略"""
@@ -434,7 +429,8 @@ class DuplicateImageDetector:
             group: 相似图片组
             watermark_keywords: 水印关键词列表，None时使用默认列表
         """
-        from nodes.pics.filter.watermark_detector import WatermarkDetector
+        from imgfilter.detectors.watermark import WatermarkDetector
+
         watermark_detector = WatermarkDetector()
         to_delete = []
         watermark_results = {}

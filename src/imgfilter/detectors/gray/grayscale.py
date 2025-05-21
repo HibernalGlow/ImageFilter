@@ -5,15 +5,9 @@ from PIL import Image
 import pillow_avif  # AVIF支持
 import pillow_jxl 
 from io import BytesIO
-from nodes.record.logger_config import setup_logger
-from nodes.pics.color.grayscale_detector import GrayscaleDetector
+from loguru import logger
+from imgfilter.detectors.gray.grayscale_detector import GrayscaleDetector
 
-# config = {
-#     'script_name': 'pics.filter.grayscale_image_detector',
-#     'console_enabled': False
-# }
-# logger, config_info = setup_logger(config)
-logger = logging.getLogger(__name__)
 class GrayscaleImageDetector:
     """灰度图、黑白图和纯色图检测器"""
     

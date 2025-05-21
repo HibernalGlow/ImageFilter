@@ -12,7 +12,7 @@ from datetime import datetime
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from textual_logger import TextualLoggerManager
-from nodes.pics.filter.hash_process_config import get_latest_hash_file_path, process_artist_folder, process_duplicates
+from hashu.utils.hash_process_config import get_latest_hash_file_path, process_artist_folder, process_duplicates
 from loguru import logger
 import os
 import sys

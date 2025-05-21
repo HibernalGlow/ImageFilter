@@ -11,7 +11,7 @@ import pyperclip
 from textual_preset import create_config_app, ConfigOption, CheckboxOption, InputOption, PresetConfig
 from common.backup import BackupHandler
 from common.archive_process import ArchiveHandler
-from nodes.pics.filter.image_filter_old import ImageFilter
+from imgfilter.scripts.image_filter_old import ImageFilter
 from common.input import InputHandler
 from common.path import PathHandler, ExtractMode
 import platform
@@ -154,7 +154,7 @@ class RecruitCoverFilter:
             str: 哈希文件路径，失败返回None
         """
         try:
-            from nodes.pics.filter.hash_process_config import process_artist_folder
+            from hashu.utils.hash_process_config import process_artist_folder
             hash_file = process_artist_folder(recruit_folder, workers, force_update)
             if hash_file:
                 logger.info(f"[#sys_log]✅ 成功生成哈希文件: {hash_file}")

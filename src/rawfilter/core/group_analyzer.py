@@ -8,7 +8,7 @@ import re
 import logging
 from typing import List, Dict, Tuple, Optional, Set
 from dataclasses import dataclass
-from nodes.utils.number_shortener import shorten_number_cn
+from ..number_shortener import shorten_number_cn
 
 logger = logging.getLogger(__name__)
 

@@ -18,10 +18,10 @@ import numpy as np
 from io import BytesIO
 import random
 from concurrent.futures import ThreadPoolExecutor
-from nodes.pics.hash.calculate_hash_custom import ImageClarityEvaluator
-from nodes.utils.number_shortener import shorten_number_cn
+from hashu.core.calculate_hash_custom import ImageClarityEvaluator
+from ..number_shortener import shorten_number_cn
 import re
-from nodes.pics.filter.group_analyzer import GroupAnalyzer
+from rawfilter.core.group_analyzer import GroupAnalyzer
 import argparse
 import json
 import sys

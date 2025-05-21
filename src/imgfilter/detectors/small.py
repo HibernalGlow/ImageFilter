@@ -5,14 +5,8 @@ from PIL import Image
 import pillow_avif  # AVIF支持
 import pillow_jxl 
 from io import BytesIO
-from nodes.record.logger_config import setup_logger
+from loguru import logger
 
-# config = {
-#     'script_name': 'pics.filter.small_image_detector',
-#     'console_enabled': False
-# }
-# logger, config_info = setup_logger(config)
-logger = logging.getLogger(__name__)
 class SmallImageDetector:
     """小尺寸图片检测器"""
     

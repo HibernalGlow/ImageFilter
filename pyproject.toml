@@ -40,7 +40,9 @@ dependencies = [
     "TextualLog @ git+https://github.com/HibernalGlow/TextualLog.git",
     "PresetUI @ git+https://github.com/HibernalGlow/PresetUI.git",
     "dghs-imgutils",
-
+    "imagehash",
+    "regex",
+    "orjson>=3.10.18",
 ]
 
 [project.optional-dependencies]
@@ -60,6 +62,7 @@ dev = [
 [project.scripts]
 imgfilter = "imgfilter.__main__:main"
 badzfilter = "badzfilter.__main__:main"
+hashu = "hashu.__main__:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 

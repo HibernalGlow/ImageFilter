@@ -12,7 +12,7 @@ from imgfilter.detectors.watermark import WatermarkDetector
 from imgfilter.detectors.text import CVTextImageDetector
 from imgfilter.detectors.duplicate import DuplicateImageDetector
 from imgfilter.detectors.small import SmallImageDetector
-from imgfilter.detectors.grayscale import GrayscaleImageDetector
+from imgfilter.detectors.gray.grayscale import GrayscaleImageDetector
 
 class ImageFilter:
     """图片过滤器，支持多种独立的过滤功能"""

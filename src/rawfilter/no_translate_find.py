@@ -27,12 +27,11 @@ from colorama import init, Fore, Style
 from typing import List, Dict, Set, Tuple, Optional, Union
 from opencc import OpenCC  # 用于繁简转换
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from nodes.pics.hash.calculate_hash_custom import ImageClarityEvaluator
+from hashu.core.calculate_hash_custom import ImageClarityEvaluator
 from textual_logger import TextualLoggerManager
-from nodes.utils.number_shortener import shorten_number_cn
-from nodes.tui.mode_manager import create_mode_manager
+from .number_shortener import shorten_number_cn
 import json
-from nodes.pics.filter.group_analyzer import GroupAnalyzer
+from rawfilter.core.group_analyzer import GroupAnalyzer
 
 from loguru import logger
 import os
@@ -1228,7 +1227,7 @@ def main():
         run_application(args)
     else:
         # 使用rich_preset配置界面
-        from nodes.tui.preset.rich_preset import create_config_app
+        from rich_preset import create_config_app
         
         result = create_config_app(
             program=sys.argv[0],

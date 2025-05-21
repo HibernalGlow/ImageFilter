@@ -14,7 +14,7 @@ from typing import Tuple, List, Optional, Dict, Any
 from concurrent.futures import ThreadPoolExecutor
 from loguru import logger
 from common.backup import BackupHandler
-from nodes.pics.filter.image_filter import ImageFilter
+from imgfilter.core.filter import ImageFilter
 from common.input import InputHandler
 
 # 全局变量定义

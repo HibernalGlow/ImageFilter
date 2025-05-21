@@ -1,9 +1,10 @@
 import os
 import logging
 from typing import List, Set, Dict, Tuple, Union
-from nodes.pics.hash.calculate_hash_custom import ImageHashCalculator, PathURIGenerator
-from nodes.pics.filter.watermark_detector import WatermarkDetector
-from nodes.pics.filter.cv_text_image_detector import CVTextImageDetector
+from hashu.core.calculate_hash_custom import ImageHashCalculator, PathURIGenerator
+from imgfilter.detectors.watermark import WatermarkDetector
+
+from imgfilter.detectors.text import CVTextImageDetector
 from PIL import Image
 import pillow_avif  # AVIF支持
 import pillow_jxl 
@@ -11,16 +12,10 @@ from io import BytesIO
 import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import multiprocessing
-from nodes.hash.hash_accelerator import HashAccelerator
+from hashu.utils.hash_accelerator import HashAccelerator
 import mmap
 import numpy as np
-from nodes.record.logger_config import setup_logger
-
-config = {
-    'script_name': 'nodes.pics.image_filter',
-    'console_enabled': True
-}
-logger, config_info = setup_logger(config)
+from loguru import logger
 
 class ImageFilter:
     """图片过滤器，支持多种独立的过滤功能"""

@@ -7,14 +7,7 @@ from pathlib import Path
 from typing import List, Tuple, Optional
 from send2trash import send2trash
 
-from nodes.record.logger_config import setup_logger
-
-# config = {
-#     'script_name': 'archive_merger',
-#     'console_enabled': True
-# }
-# logger, _ = setup_logger(config)
-logger = logging.getLogger(__name__)
+from loguru import logger
 class ArchiveMerger:
     # 黑名单关键词列表，用于过滤不需要处理的文件
     BLACKLIST_KEYWORDS = ['merged_', 'temp_', 'backup_', '.new', '.trash']

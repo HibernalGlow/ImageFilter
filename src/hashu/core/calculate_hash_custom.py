@@ -25,16 +25,9 @@ from typing import Dict, Tuple, Union, List, Optional
 import re
 from functools import lru_cache
 import time
-from nodes.pics.hash.path_uri import PathURIGenerator 
-from nodes.pics.hash.image_clarity import ImageClarityEvaluator
-from nodes.record.logger_config import setup_logger
-
-# config = {
-#     'script_name': 'calculate_hash_custom',
-#     'console_enabled': False
-# }
-# logger, config_info = setup_logger(config)
-logger = logging.getLogger(__name__)
+from hashu.utils.path_uri import PathURIGenerator 
+from hashu.utils.image_clarity import ImageClarityEvaluator
+from loguru import logger
 # 导出这些类，使其保持向后兼容
 __all__ = [
     'PathURIGenerator',

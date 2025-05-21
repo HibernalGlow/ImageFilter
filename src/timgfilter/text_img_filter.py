@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 from typing import Dict, Any, List
 from common.archive import ArchiveHandler
-from nodes.pics.filter.image_filter import ImageFilter
+from imgfilter.core.filter import ImageFilter
 from common.input import InputHandler
 
 def process_archive(archive_path: str, filter_params: Dict[str, Any] = None) -> None:

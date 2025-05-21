@@ -11,20 +11,13 @@ import logging
 import cv2
 import time
 from typing import List, Set, Dict, Tuple, Union
-from nodes.pics.color.grayscale_detector import GrayscaleDetector, GrayscaleConfig
+from imgfilter.detectors.gray.grayscale_detector import GrayscaleDetector, GrayscaleConfig
 
 # 添加PathURIGenerator导入
-from nodes.pics.hash.calculate_hash_custom import PathURIGenerator
+from hashu.core.calculate_hash_custom import PathURIGenerator
 
 # 设置日志
-from nodes.record.logger_config import setup_logger
-
-# config = {
-#     'script_name': 'nodes.pics.cv_text_image_detector',
-#     'console_enabled': True
-# }
-# logger, config_info = setup_logger(config)
-logger = logging.getLogger(__name__)
+from loguru import logger
 # 是否启用调试模式
 DEBUG_MODE = False
 
