@@ -44,7 +44,7 @@ dependencies = [
     "regex",
     "orjson>=3.10.18",
     "pywin32>=310",
-    "opencc>=1.1.9",
+    "opencc",
     "typer>=0.15.4",
 ]
 

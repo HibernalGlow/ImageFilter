@@ -14,7 +14,7 @@ import shutil
 from regex import F
 from hashu.core.calculate_hash_custom import ImageHashCalculator, PathURIGenerator
 from hashu.utils.hash_accelerator import HashAccelerator
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
 from loguru import logger
 
 class DuplicateImageDetector:
@@ -192,49 +192,67 @@ class DuplicateImageDetector:
                 return None
         except Exception as e:
             logger.error(f"[#hash_calc]读取图片数据失败 {image_path}: {e}")
-            return None
+            return None# 进程工作函数需要定义在类外部，以便序列化
+def process_image_hash(img: str, archive_path: str = None, temp_dir: str = None, 
+                      image_archive_map: Dict[str, Union[str, Dict]] = None) -> Tuple[str, Tuple[str, str]]:
+    """
+    为单张图片计算哈希值(进程工作函数)
     
-    def _calculate_hashes_for_images(self, images: List[str], archive_path: str = None, temp_dir: str = None, 
-                                    image_archive_map: Dict[str, Union[str, Dict]] = None) -> Dict[str, Tuple[str, str]]:
-        """
-        为图片列表计算哈希值
+    Args:
+        img: 图片文件路径
+        archive_path: 原始压缩包路径
+        temp_dir: 临时解压目录
+        image_archive_map: 图片到压缩包内信息的映射
         
-        Args:
-            images: 图片文件列表
-            archive_path: 原始压缩包路径
-            temp_dir: 临时解压目录
-            image_archive_map: 图片到压缩包内信息的映射，可以是字符串URI或包含详细信息的字典
+    Returns:
+        Tuple[str, Tuple[str, str]]: (图片路径, (URI, 哈希值)) 或 (图片路径, None)
+    """
+    try:
+        # 从映射中获取压缩包信息，如果不存在则尝试从路径推导
+        zip_path = None
+        internal_path = None
+        
+        if image_archive_map and img in image_archive_map:
+            # 检查映射中的数据类型
+            map_data = image_archive_map[img]
+            if isinstance(map_data, dict):
+                # 新格式：直接从字典中获取路径信息
+                zip_path = map_data.get('zip_path')
+                internal_path = map_data.get('internal_path')
+                # 如果字典中有哈希值，可以直接使用
+                if 'hash' in map_data and map_data['hash']:
+                    uri = map_data.get('archive_uri') or PathURIGenerator.generate(f"{zip_path}!{internal_path}")
+                    return img, (uri, map_data['hash'])
+        elif temp_dir and archive_path and os.path.exists(img):
+            # 计算相对于临时目录的路径
+            if img.startswith(temp_dir):
+                internal_path = os.path.relpath(img, temp_dir)
+                internal_path = internal_path.replace('\\', '/')
+                zip_path = archive_path
+        elif '!' in img:
+            # 处理压缩包内的图片路径
+            # 检查是否是压缩包路径
+            archive_extensions = ['.zip!','.cbz!','.cbr!', '.rar!', '.7z!', '.tar!']
+            is_archive = any(ext in img for ext in archive_extensions)
             
-        Returns:
-            Dict[str, Tuple[str, str]]: {图片路径: (URI, 哈希值)}
-        """
-        hash_values = {}
-        for img in images:
-            try:
-                # 从映射中获取压缩包信息，如果不存在则尝试从路径推导
-                zip_path = None
-                internal_path = None
+            if is_archive:
+                # 找到最后一个压缩文件扩展名的位置
+                positions = [img.find(ext) for ext in archive_extensions if ext in img]
+                split_pos = max([pos + len(ext) - 1 for pos, ext in zip(positions, [ext for ext in archive_extensions if ext in img])])
                 
-                if image_archive_map and img in image_archive_map:
-                    # 检查映射中的数据类型
-                    map_data = image_archive_map[img]
-                    if isinstance(map_data, dict):
-                        # 新格式：直接从字典中获取路径信息
-                        zip_path = map_data.get('zip_path')
-                        internal_path = map_data.get('internal_path')
-                        # 如果字典中有哈希值，可以直接使用
-                        if 'hash' in map_data and map_data['hash']:
-                            uri = map_data.get('archive_uri') or PathURIGenerator.generate(f"{zip_path}!{internal_path}")
-                            hash_values[img] = (uri, map_data['hash'])
-                            continue
-                elif temp_dir and archive_path and os.path.exists(img):
-                    # 计算相对于临时目录的路径
-                    if img.startswith(temp_dir):
-                        internal_path = os.path.relpath(img, temp_dir)
-                        internal_path = internal_path.replace('\\', '/')
-                        zip_path = archive_path
-                elif '!' in img:
-                    # 处理压缩包内的图片路径
+                # 分割压缩包路径和内部路径
+                zip_path = img[:split_pos]
+                internal_path = img[split_pos+1:]
+        
+        # 进程中无法访问类实例的mmap缓存，直接读取文件
+        try:
+            # 检查URI
+            uri = None
+            if zip_path and internal_path:
+                uri = PathURIGenerator.generate(f"{zip_path}!{internal_path}")
+            else:
+                # 检查是否是压缩包中的图片
+                if '!' in img:
                     # 检查是否是压缩包路径
                     archive_extensions = ['.zip!','.cbz!','.cbr!', '.rar!', '.7z!', '.tar!']
                     is_archive = any(ext in img for ext in archive_extensions)
@@ -247,14 +265,181 @@ class DuplicateImageDetector:
                         # 分割压缩包路径和内部路径
                         zip_path = img[:split_pos]
                         internal_path = img[split_pos+1:]
+                    if not os.path.exists(zip_path):
+                        return img, None
+                    uri = PathURIGenerator.generate(f"{zip_path}!{internal_path}")
+                elif not os.path.exists(img):
+                    return img, None
+                else:
+                    uri = PathURIGenerator.generate(img)
+
+            if not uri:
+                return img, None
+
+            # 查询全局缓存
+            cached_hash = ImageHashCalculator.get_hash_from_url(uri)
+            if cached_hash:
+                return img, (uri, cached_hash)
+
+            # 读取图片数据
+            if os.path.exists(img) and os.path.getsize(img) > 0:
+                with open(img, 'rb') as f:
+                    img_data = f.read()
                 
-                result = self._get_image_hash_with_preload(img, internal_path, zip_path)
-                if result:
-                    uri, hash_value = result
-                    hash_values[img] = (uri, hash_value)
-            except Exception as e:
-                logger.error(f"[#hash_calc]计算哈希值失败 {img}: {e}")
+                # 计算哈希值
+                hash_result = ImageHashCalculator.calculate_phash(img_data, url=uri)
+                
+                if not hash_result:
+                    return img, None
+
+                hash_value = hash_result.get('hash') if isinstance(hash_result, dict) else hash_result
+                if not hash_value:
+                    return img, None
+
+                return img, (uri, hash_value)
+            return img, None
+        except Exception as e:
+            return img, None
+    except Exception as e:
+        return img, None
+
+def worker_init():
+    """工作进程初始化函数"""
+    # 禁用在工作进程中的PIL调试输出
+    import logging
+    logging.getLogger('PIL').setLevel(logging.WARNING)
+
+class DuplicateImageDetector:
+    """重复图片检测器，支持多种检测策略"""
+    
+    def __init__(self, hash_file: str = None, hamming_threshold: int = 12, 
+                 ref_hamming_threshold: int = None, max_workers: int = None):
+        """
+        初始化重复图片检测器
         
+        Args:
+            hash_file: 哈希文件路径，用于哈希模式
+            hamming_threshold: 汉明距离阈值，用于相似图片组检测
+            ref_hamming_threshold: 哈希文件过滤的汉明距离阈值，默认使用hamming_threshold
+            max_workers: 最大工作线程数，默认为CPU核心数
+        """
+        self.hash_file = hash_file
+        self.hamming_threshold = hamming_threshold
+        self.ref_hamming_threshold = ref_hamming_threshold if ref_hamming_threshold is not None else hamming_threshold
+        self.max_workers = max_workers or multiprocessing.cpu_count()*2
+        self.hash_cache = {}
+        self.mmap_cache = {}  # 添加mmap缓存
+        if hash_file:
+            self.hash_cache = self._load_hash_file()
+            
+    def _calculate_hash_for_single_image(self, img: str, archive_path: str = None, temp_dir: str = None, 
+                                     image_archive_map: Dict[str, Union[str, Dict]] = None) -> Tuple[str, Tuple[str, str]]:
+        """
+        为单张图片计算哈希值(线程工作函数)
+        
+        Args:
+            img: 图片文件路径
+            archive_path: 原始压缩包路径
+            temp_dir: 临时解压目录
+            image_archive_map: 图片到压缩包内信息的映射
+            
+        Returns:
+            Tuple[str, Tuple[str, str]]: (图片路径, (URI, 哈希值)) 或 (图片路径, None)
+        """
+        try:
+            # 从映射中获取压缩包信息，如果不存在则尝试从路径推导
+            zip_path = None
+            internal_path = None
+            
+            if image_archive_map and img in image_archive_map:
+                # 检查映射中的数据类型
+                map_data = image_archive_map[img]
+                if isinstance(map_data, dict):
+                    # 新格式：直接从字典中获取路径信息
+                    zip_path = map_data.get('zip_path')
+                    internal_path = map_data.get('internal_path')
+                    # 如果字典中有哈希值，可以直接使用
+                    if 'hash' in map_data and map_data['hash']:
+                        uri = map_data.get('archive_uri') or PathURIGenerator.generate(f"{zip_path}!{internal_path}")
+                        return img, (uri, map_data['hash'])
+            elif temp_dir and archive_path and os.path.exists(img):
+                # 计算相对于临时目录的路径
+                if img.startswith(temp_dir):
+                    internal_path = os.path.relpath(img, temp_dir)
+                    internal_path = internal_path.replace('\\', '/')
+                    zip_path = archive_path
+            elif '!' in img:
+                # 处理压缩包内的图片路径
+                # 检查是否是压缩包路径
+                archive_extensions = ['.zip!','.cbz!','.cbr!', '.rar!', '.7z!', '.tar!']
+                is_archive = any(ext in img for ext in archive_extensions)
+                
+                if is_archive:
+                    # 找到最后一个压缩文件扩展名的位置
+                    positions = [img.find(ext) for ext in archive_extensions if ext in img]
+                    split_pos = max([pos + len(ext) - 1 for pos, ext in zip(positions, [ext for ext in archive_extensions if ext in img])])
+                    
+                    # 分割压缩包路径和内部路径
+                    zip_path = img[:split_pos]
+                    internal_path = img[split_pos+1:]
+            
+            result = self._get_image_hash_with_preload(img, internal_path, zip_path)
+            if result:
+                return img, result
+            return img, None
+        except Exception as e:
+            logger.error(f"[#hash_calc]计算哈希值失败 {img}: {e}")
+            return img, None
+    def _calculate_hashes_for_images(self, images: List[str], archive_path: str = None, temp_dir: str = None, 
+                                    image_archive_map: Dict[str, Union[str, Dict]] = None) -> Dict[str, Tuple[str, str]]:
+        """
+        为图片列表计算哈希值 (多进程并发实现)
+        
+        Args:
+            images: 图片文件列表
+            archive_path: 原始压缩包路径
+            temp_dir: 临时解压目录
+            image_archive_map: 图片到压缩包内信息的映射，可以是字符串URI或包含详细信息的字典
+            
+        Returns:
+            Dict[str, Tuple[str, str]]: {图片路径: (URI, 哈希值)}
+        """
+        hash_values = {}
+        total_images = len(images)
+        
+        if total_images == 0:
+            return hash_values
+            
+        # 使用进程池进行并发处理
+        logger.info(f"[#hash_calc]开始并发计算 {total_images} 张图片的哈希值，使用 {self.max_workers} 个进程")
+        
+        with ProcessPoolExecutor(max_workers=self.max_workers, initializer=worker_init) as executor:
+            # 提交所有任务
+            future_to_img = {
+                executor.submit(
+                    process_image_hash, 
+                    img, 
+                    archive_path, 
+                    temp_dir, 
+                    image_archive_map
+                ): img for img in images
+            }
+            
+            # 收集完成的任务结果
+            completed = 0
+            for future in as_completed(future_to_img):
+                img_path, result = future.result()
+                completed += 1
+                
+                # 每处理10%的图片输出一次进度
+                if completed % max(1, total_images // 10) == 0 or completed == total_images:
+                    progress = (completed / total_images) * 100
+                    logger.info(f"[#hash_calc]哈希计算进度: {completed}/{total_images} ({progress:.1f}%)")
+                
+                if result:
+                    hash_values[img_path] = result
+        
+        logger.info(f"[#hash_calc]完成 {len(hash_values)}/{total_images} 张图片的哈希计算")
         return hash_values
 
     def _get_image_hash_with_preload(self, image_path: str, internal_path: str = None, zip_path: str = None) -> Tuple[str, str]:
