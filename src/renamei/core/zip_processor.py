@@ -12,9 +12,8 @@ from .processors import (
 
 class ZipProcessor:
     """压缩包处理器"""
-    
-    def __init__(self):
-        self.ad_detector = AdImageDetector()
+    def __init__(self, config_path=None):
+        self.ad_detector = AdImageDetector(config_path)
         self.file_renamer = FileRenamer()
         self.duplicate_handler = DuplicateFileHandler(self.file_renamer)
         self.temp_manager = TempDirectoryManager()
@@ -83,7 +82,6 @@ class ZipProcessor:
         zip_basename = os.path.basename(zip_path)
         zip_dirname = os.path.dirname(zip_path)
         return os.path.join(zip_dirname, f"{zip_basename}.trash")
-    
     def _process_ad_images(self, zip_path: str, trash_dir: str) -> bool:
         """处理广告图片"""
         try:
@@ -108,26 +106,30 @@ class ZipProcessor:
                 logger.warning("为防止误删除，已取消删除操作（删除比例超过80%）")
                 return True
             
-            # 创建回收站目录并提取广告图片
+            # 创建回收站目录
             os.makedirs(trash_dir, exist_ok=True)
             logger.info(f"创建回收站目录: {trash_dir}")
             
-            # 提取广告图片到回收站
+            # 解压整个压缩包到临时目录，然后复制广告图片到回收站
             temp_dir = self.temp_manager.create_temp_dir()
-            for ad_file in ad_files:
-                if tool.extract(zip_path, temp_dir):
+            if tool.extract(zip_path, temp_dir):
+                # 复制广告图片到回收站
+                for ad_file in ad_files:
                     src_path = os.path.join(temp_dir, ad_file)
                     if os.path.exists(src_path):
                         dst_path = os.path.join(trash_dir, os.path.basename(ad_file))
                         shutil.copy2(src_path, dst_path)
                         logger.info(f"已提取广告图片到回收站: {ad_file}")
-            
-            # 从压缩包中删除广告图片
-            if tool.delete_files(zip_path, ad_files):
-                logger.info(f"已从压缩包中删除 {len(ad_files)} 个广告图片")
-                return True
+                
+                # 从压缩包中删除广告图片
+                if tool.delete_files(zip_path, ad_files):
+                    logger.info(f"已从压缩包中删除 {len(ad_files)} 个广告图片")
+                    return True
+                else:
+                    logger.error("删除广告图片失败")
+                    return False
             else:
-                logger.error("删除广告图片失败")
+                logger.error("解压文件失败，无法提取广告图片")
                 return False
                 
         except Exception as e:

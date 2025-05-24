@@ -14,10 +14,9 @@ from .processors import AdImageDetector, FileRenamer
 
 class DirectoryProcessor:
     """目录处理器"""
-    
-    def __init__(self, console: Console):
+    def __init__(self, console: Console, config_path=None):
         self.console = console
-        self.ad_detector = AdImageDetector()
+        self.ad_detector = AdImageDetector(config_path)
         self.file_renamer = FileRenamer()
     
     def process_directory(self, dir_path: str) -> Tuple[int, int, int]:
@@ -82,10 +81,10 @@ class DirectoryProcessor:
                 if self._is_image_file(f):
                     count += 1
         return count
-    
     def _is_image_file(self, filename: str) -> bool:
         """检查文件是否为图片文件"""
-        return filename.lower().endswith(('.jpg', '.png', '.avif', '.jxl', 'webp'))
+        # 使用ad_detector中的扩展名检测，确保一致性
+        return self.ad_detector._is_image_file(filename)
     
     def _handle_ad_file(self, file_path: str, input_base_path: str) -> bool:
         """处理广告文件：备份并删除"""

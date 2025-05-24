@@ -14,38 +14,99 @@ from loguru import logger
 class AdImageDetector:
     """广告图片检测器"""
     
-    def __init__(self):
-        self.ad_patterns = [
-            r'招募',
-            r'credit',
-            r'广告',
+    def __init__(self, config_path=None):
+        """初始化广告图片检测器
+        
+        Args:
+            config_path: 配置文件路径，如果为None则使用默认路径
+        """
+        # 默认配置
+        self.ad_keywords = [
+            '招募',
+            'credit',
+            '广告',
+            '宣传',
+            '招新',
+            '绅士快乐',
+            '粉丝群',
+            '無邪気'
+        ]
+        self.ad_regex_patterns = [
             r'[Cc]redit[s]',
-            r'宣传',
-            r'招新',
             r'ver\.\d+\.\d+',
             r'YZv\.\d+\.\d+',
-            r'绅士快乐',
-            r'粉丝群',
-            r'z{3,}',
-            r'無邪気'
+            r'z{3,}'
         ]
-        self.combined_pattern = '|'.join(self.ad_patterns)
+        self.image_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.avif', '.jxl', '.tiff', '.tif'}
+        
+        # 尝试从配置文件加载
+        if config_path is None:
+            # 默认配置文件路径
+            config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'ad_detector_config.json')
+        
+        self._load_config(config_path)
+        # 编译正则表达式模式
+        self.combined_regex = None
+        if self.ad_regex_patterns:
+            self.combined_regex = re.compile('|'.join(self.ad_regex_patterns))
+        logger.debug(f"广告图片检测器初始化完成，加载了{len(self.ad_keywords)}个关键词和{len(self.ad_regex_patterns)}个正则模式")
     
+    def _load_config(self, config_path):
+        """从配置文件加载广告匹配模式
+        
+        Args:
+            config_path: 配置文件路径
+        """
+        try:
+            import json
+            if os.path.exists(config_path):
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                
+                if 'ad_keywords' in config:
+                    self.ad_keywords = config['ad_keywords']
+                    logger.info(f"从配置文件 {config_path} 加载了 {len(self.ad_keywords)} 个广告关键词")
+                
+                if 'ad_regex_patterns' in config:
+                    self.ad_regex_patterns = config['ad_regex_patterns']
+                    logger.info(f"从配置文件 {config_path} 加载了 {len(self.ad_regex_patterns)} 个广告正则模式")
+                
+                # 向后兼容，支持旧版配置
+                elif 'ad_patterns' in config:
+                    self.ad_keywords = config['ad_patterns']
+                    logger.info(f"从配置文件 {config_path} 加载了 {len(self.ad_keywords)} 个广告匹配模式（旧版格式）")
+                
+                if 'image_extensions' in config:
+                    self.image_extensions = set(config['image_extensions'])
+                    logger.info(f"从配置文件 {config_path} 加载了 {len(self.image_extensions)} 个图片扩展名")
+            else:
+                logger.warning(f"配置文件 {config_path} 不存在，使用默认配置")
+        except Exception as e:
+            logger.error(f"加载配置文件 {config_path} 失败: {e}")
+            logger.warning("使用默认广告匹配模式配置")
     def is_ad_image(self, filename: str) -> bool:
         """检查文件名是否匹配广告图片模式"""
         if not self._is_image_file(filename):
             return False
         
-        result = bool(re.search(self.combined_pattern, filename))
-        if result:
-            logger.debug(f"检测到广告图片: {filename}")
-        return result
+        # 方法1: 直接字符串关键词匹配
+        for keyword in self.ad_keywords:
+            if keyword in filename:
+                logger.info(f"检测到广告关键词 '{keyword}' 在文件: {filename}")
+                return True
+        
+        # 方法2: 正则表达式匹配
+        if self.combined_regex and self.combined_regex.search(filename):
+            logger.info(f"检测到正则匹配广告图片: {filename}")
+            return True
+        
+        logger.debug(f"文件不匹配任何广告模式: {filename}")
+        return False
     
     def _is_image_file(self, filename: str) -> bool:
         """检查文件是否为图片文件"""
-        image_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.avif', '.jxl', '.tiff', '.tif'}
         ext = os.path.splitext(filename.lower())[1]
-        return ext in image_extensions
+        return ext in self.image_extensions
 
 
 class FileRenamer:
@@ -162,6 +223,7 @@ class TempDirectoryManager:
         self.base_dir = r"E:\2400EHV\extracted_archives"
         # 确保基础目录存在
         os.makedirs(self.base_dir, exist_ok=True)
+        logger.info(f"使用固定解压目录: {self.base_dir}")
     
     def create_temp_dir(self) -> str:
         """创建临时目录"""
@@ -182,8 +244,9 @@ class TempDirectoryManager:
         """清理所有临时目录"""
         for temp_dir in self.temp_dirs:
             try:
-                shutil.rmtree(temp_dir, ignore_errors=True)
-                logger.debug(f"清理目录: {temp_dir}")
+                if os.path.exists(temp_dir):
+                    shutil.rmtree(temp_dir, ignore_errors=True)
+                    logger.debug(f"清理目录: {temp_dir}")
             except Exception as e:
                 logger.warning(f"清理目录失败 {temp_dir}: {e}")
         self.temp_dirs.clear()
@@ -215,12 +278,18 @@ class SevenZipTool(CompressionTool):
     def extract(self, zip_path: str, extract_dir: str) -> bool:
         """使用7z解压文件"""
         try:
-            extract_cmd = ['7z', 'x', zip_path, f'-o{extract_dir}']
+            logger.debug(f"开始使用7z解压 {zip_path} 到 {extract_dir}")
+            extract_cmd = ['7z', 'x', '-y', zip_path, f'-o{extract_dir}']
             result = subprocess.run(extract_cmd, check=True, capture_output=True, 
                                   encoding='utf-8', errors='ignore')
+            logger.debug(f"7z解压完成，返回码: {result.returncode}")
             return True
         except subprocess.CalledProcessError as e:
             logger.error(f"7z解压失败: {e}")
+            logger.error(f"7z错误输出: {e.stderr if hasattr(e, 'stderr') else ''}")
+            return False
+        except Exception as e:
+            logger.error(f"7z解压过程发生异常: {e}")
             return False
     
     def create(self, zip_path: str, source_dir: str) -> bool:
@@ -270,9 +339,16 @@ class BandizipTool(CompressionTool):
     def extract(self, zip_path: str, extract_dir: str) -> bool:
         """使用Bandizip解压文件"""
         try:
+            logger.debug(f"开始使用Bandizip解压 {zip_path} 到 {extract_dir}")
+            # 确保提取路径存在
+            os.makedirs(extract_dir, exist_ok=True)
+            # 注意：Bandizip可能需要路径带引号
             extract_cmd = ['bz', 'x', '-o:', f'"{extract_dir}"', f'"{zip_path}"']
-            result = subprocess.run(' '.join(extract_cmd), shell=True, 
+            command_str = ' '.join(extract_cmd)
+            logger.debug(f"执行命令: {command_str}")
+            result = subprocess.run(command_str, shell=True, 
                                   capture_output=True, encoding='utf-8', errors='ignore')
+            logger.debug(f"Bandizip解压完成，返回码: {result.returncode}")
             return result.returncode == 0
         except Exception as e:
             logger.error(f"Bandizip解压失败: {e}")

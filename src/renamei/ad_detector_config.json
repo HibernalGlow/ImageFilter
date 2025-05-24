@@ -1,0 +1,31 @@
+{
+    "ad_keywords": [
+        "招募",
+        "credit",
+        "广告",
+        "宣传",
+        "招新",
+        "绅士快乐",
+        "粉丝群",
+        "無邪気",
+        "testeng"
+    ],
+    "ad_regex_patterns": [
+        "[Cc]redit[s]",
+        "ver\\.\\d+\\.\\d+",
+        "YZv\\.\\d+\\.\\d+",
+        "z{3,}"
+    ],
+    "image_extensions": [
+        ".jpg", 
+        ".jpeg", 
+        ".png", 
+        ".gif", 
+        ".bmp", 
+        ".webp", 
+        ".avif", 
+        ".jxl", 
+        ".tiff", 
+        ".tif"
+    ]
+}
