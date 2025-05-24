@@ -20,7 +20,7 @@ class ZipProcessor:
         
         # 压缩工具优先级：7z -> Bandizip
         self.compression_tools = [SevenZipTool(), BandizipTool()]
-    
+        # self.compression_tools = SevenZipTool()
     def needs_modification(self, zip_path: str) -> bool:
         """检查压缩包是否需要进行修改"""
         try:

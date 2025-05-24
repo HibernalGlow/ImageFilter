@@ -302,25 +302,79 @@ class SevenZipTool(CompressionTool):
         except subprocess.CalledProcessError as e:
             logger.error(f"7z打包失败: {e}")
             return False
-    
-    def list_files(self, zip_path: str) -> List[str]:
-        """使用7z列出文件"""
+
+    def list_files_zipfile(self, zip_path: str) -> List[str]:
+        """使用zipfile模块列出压缩包中的文件，支持中英日文字符"""
         try:
+            logger.debug(f"列出压缩包中的文件: {zip_path}")
+            import zipfile
+            # 尝试不同的编码方式解析文件名
+            encodings = ['utf-8']
+            files = []
+            
+            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                namelist = zip_ref.namelist()
+                
+                for name in namelist:
+                    # 尝试不同编码方式解码文件名
+                    decoded_name = None
+                    for encoding in encodings:
+                        try:
+                            # 对于非UTF-8编码的文件名，需要先将bytes解码
+                            if encoding != 'utf-8':
+                                # 将文件名视为bytes并以指定编码解码
+                                decoded_name = name.encode('cp437').decode(encoding)
+                            else:
+                                decoded_name = name
+                            break
+                        except UnicodeDecodeError:
+                            continue
+                    
+                    if decoded_name:
+                        files.append(decoded_name)
+                    else:
+                        # 如果所有编码都失败，使用原始名称
+                        files.append(name)
+                        
+            return files
+        except Exception as e:
+            logger.error(f"列出文件失败: {e}")
+            # 如果zipfile失败，回退到7z方法
+            return self.list_files(zip_path)
+
+    def list_files(self, zip_path: str) -> List[str]:
+        """使用7z列出压缩包中的文件，支持中英日文字符"""
+        try:
+            # 使用系统默认编码处理中文文件名
             list_cmd = ['7z', 'l', '-slt', zip_path]
             result = subprocess.run(list_cmd, capture_output=True, 
-                                  encoding='utf-8', errors='ignore')
+                                  text=False)  # 获取bytes输出
             
             files = []
-            for line in result.stdout.split('\n'):
+            # 尝试多种编码解析输出
+            encodings = ['utf-8', 'gbk', 'shift-jis', 'cp936']
+            stdout_text = None
+            
+            for encoding in encodings:
+                try:
+                    stdout_text = result.stdout.decode(encoding)
+                    break
+                except UnicodeDecodeError:
+                    continue
+            
+            if stdout_text is None:
+                stdout_text = result.stdout.decode('utf-8', errors='ignore')
+                
+            for line in stdout_text.split('\n'):
                 if line.startswith('Path = '):
                     file_path = line[7:].strip()
                     if file_path:
                         files.append(file_path)
             return files
         except Exception as e:
-            logger.error(f"7z列出文件失败: {e}")
-            return []
-    
+            logger.error(f"列出文件失败: {e}")
+            # 如果失败，回退到zipfile方法
+            return self.list_files_zipfile(zip_path)
     def delete_files(self, zip_path: str, files_to_delete: List[str]) -> bool:
         """使用7z删除文件"""
         try:
