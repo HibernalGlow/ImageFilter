@@ -72,6 +72,7 @@ rawfilter = "rawfilter.__main__:main"
 recruitfilter = "recruitfilter.__main__:main"
 textfilter = "textfilter.__main__:main"
 widthfilter = "widthfilter.__main__:main"
+renamei = "renamei.__main__:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
