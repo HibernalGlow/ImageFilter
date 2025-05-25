@@ -129,7 +129,7 @@ for source_type, count in stats['by_source_type'].items():
 
 1. **备份原始数据**: 迁移前建议备份原始JSON文件
 2. **磁盘空间**: 确保有足够的磁盘空间存储SQLite数据库
-3. **配置文件**: 确保`database_config.json`配置正确
+3. **配置文件**: 确保`config.json`配置正确
 4. **权限**: 确保对数据库文件目录有写权限
 
 ## 性能参考
@@ -144,7 +144,7 @@ for source_type, count in stats['by_source_type'].items():
 ### 常见问题
 
 1. **导入错误**: 确保项目根目录在Python路径中
-2. **配置文件不存在**: 检查`src/hashu/config/database_config.json`
+2. **配置文件不存在**: 检查`src/hashu/config/config.json`
 3. **权限错误**: 确保对数据库文件目录有读写权限
 4. **内存不足**: 对于大型JSON文件，考虑分批迁移
 

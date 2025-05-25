@@ -34,7 +34,7 @@ class ConfigManager:
         """获取默认配置文件路径"""
         # 相对于当前模块的配置文件路径
         current_dir = Path(__file__).parent
-        config_path = current_dir / "database_config.json"
+        config_path = current_dir / "config.json"
         
         # 如果配置文件不存在，创建默认配置
         if not config_path.exists():
@@ -47,7 +47,7 @@ class ConfigManager:
         default_config = {
             "sqlite_databases": [
                 os.path.expanduser("~/hashu_database.db"),
-                os.path.expanduser("~/hashu_backup.db")
+                # os.path.expanduser("~/hashu_backup.db")
             ],
             "json_hash_files": [
                 os.path.expanduser("~/image_hashes_collection.json"),
