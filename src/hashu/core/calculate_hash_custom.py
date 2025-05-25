@@ -34,9 +34,13 @@ __all__ = [
     'HashCache',
 ]
 
+# 导入SQLite存储模块
+from hashu.core.sqlite_storage import HashDatabaseManager, get_database_instance
+
 # 多进程同步锁
 import threading
 _cache_lock = threading.RLock()  # 使用递归锁防止死锁
+
 # 全局配置
 GLOBAL_HASH_FILES = [
     os.path.expanduser(r"E:\1EHV\image_hashes_collection.json"),
@@ -44,6 +48,7 @@ GLOBAL_HASH_FILES = [
 ]
 CACHE_TIMEOUT = 1800  # 缓存超时时间(秒)
 HASH_FILES_LIST=os.path.expanduser(r"E:\1EHV\hash_files_list.txt")
+
 # 哈希计算参数
 HASH_PARAMS = {
     'hash_size': 10,  # 默认哈希大小
@@ -55,16 +60,19 @@ MULTIPROCESS_CONFIG = {
     'enable_auto_save': True,  # 是否启用自动保存（多进程环境下建议关闭）
     'enable_global_cache': True,  # 是否启用全局缓存查询
     'preload_cache': None,  # 预加载的缓存字典，用于多进程环境
+    'use_sqlite': True,  # 是否启用SQLite存储
+    'sqlite_priority': True,  # SQLite查询优先级是否高于JSON缓存
 }
 
 class HashCache:
-    """哈希值缓存管理类（优化多进程支持）"""
+    """哈希值缓存管理类（SQLite + JSON双存储优化版本）"""
     _instance = None
     _cache = {}
     _initialized = False
     _last_refresh = 0
     _last_save = 0  # 新增：记录上次保存时间
     _hash_counter = 0  # 新增：哈希计算计数器
+    _sqlite_db = None  # SQLite数据库实例
 
     def __new__(cls):
         """线程安全的单例模式"""
@@ -72,6 +80,17 @@ class HashCache:
             if not cls._instance:
                 cls._instance = super().__new__(cls)
             return cls._instance
+
+    @classmethod
+    def _get_sqlite_db(cls) -> Optional[HashDatabaseManager]:
+        """获取SQLite数据库实例"""
+        if cls._sqlite_db is None and MULTIPROCESS_CONFIG.get('use_sqlite', True):
+            try:
+                cls._sqlite_db = get_database_instance()
+                logger.info("SQLite数据库已初始化")
+            except Exception as e:
+                logger.error(f"初始化SQLite数据库失败: {e}")
+        return cls._sqlite_db
 
     @classmethod
     def get_cache(cls, use_preload: bool = False):
@@ -86,7 +105,7 @@ class HashCache:
                 return MULTIPROCESS_CONFIG['preload_cache']
                 
             current_time = time.time()
-              # 如果未初始化或者距离上次刷新超过超时时间，则刷新缓存
+            # 如果未初始化或者距离上次刷新超过超时时间，则刷新缓存
             if not cls._initialized or (current_time - cls._last_refresh > CACHE_TIMEOUT):
                 cls.refresh_cache()
             return cls._cache.copy()  # 返回副本避免并发修改
@@ -189,26 +208,36 @@ class HashCache:
                     logger.error(f"同步缓存到文件失败: {e}")
                     return False
             
-            return False
-
-    @classmethod
-    def add_hash(cls, uri: str, hash_value: str, auto_sync: bool = True):
-        """添加哈希值到缓存
+            return False    @classmethod
+    def add_hash(cls, uri: str, hash_value: str, auto_sync: bool = True, metadata: Dict[str, any] = None):
+        """添加哈希值到缓存（支持SQLite和JSON双存储）
         
         Args:
             uri: 标准化的URI
             hash_value: 哈希值
             auto_sync: 是否自动同步到文件
+            metadata: 额外元数据（文件大小、图片尺寸等）
         """
         with _cache_lock:
+            # 更新内存缓存
             cls._cache[uri] = hash_value
+            
+            # 如果启用SQLite，同时写入数据库
+            sqlite_db = cls._get_sqlite_db()
+            if sqlite_db:
+                try:
+                    sqlite_db.add_hash(uri, hash_value, metadata=metadata or {})
+                    logger.debug(f"哈希值已写入SQLite: {uri}")
+                except Exception as e:
+                    logger.error(f"写入SQLite失败: {e}")
+            
             if auto_sync:
                 cls._hash_counter += 1
                 cls.sync_to_file()
 
     @classmethod
     def get_hash(cls, uri: str, use_preload: bool = False) -> Optional[str]:
-        """获取指定URI的哈希值
+        """获取指定URI的哈希值（智能查询：SQLite优先 + 格式转换匹配）
         
         Args:
             uri: 标准化的URI
@@ -217,49 +246,216 @@ class HashCache:
         Returns:
             Optional[str]: 哈希值，未找到返回None
         """
+        # 1. 如果启用SQLite且设置为优先，先查询SQLite
+        if MULTIPROCESS_CONFIG.get('use_sqlite', True) and MULTIPROCESS_CONFIG.get('sqlite_priority', True):
+            sqlite_db = cls._get_sqlite_db()
+            if sqlite_db:
+                try:
+                    # 使用智能查询，支持格式转换匹配
+                    hash_value = sqlite_db.smart_query(uri)
+                    if hash_value:
+                        logger.debug(f"SQLite智能查询命中: {uri}")
+                        return hash_value
+                except Exception as e:
+                    logger.error(f"SQLite查询失败: {e}")
+        
+        # 2. 查询内存缓存
         cache = cls.get_cache(use_preload=use_preload)
-        return cache.get(uri)
+        hash_value = cache.get(uri)
+        if hash_value:
+            logger.debug(f"内存缓存命中: {uri}")
+            return hash_value
+        
+        # 3. 如果SQLite不是优先级或者前面查询失败，再查询SQLite
+        if MULTIPROCESS_CONFIG.get('use_sqlite', True) and not MULTIPROCESS_CONFIG.get('sqlite_priority', True):
+            sqlite_db = cls._get_sqlite_db()
+            if sqlite_db:
+                try:
+                    hash_value = sqlite_db.smart_query(uri)
+                    if hash_value:
+                        logger.debug(f"SQLite备用查询命中: {uri}")
+                        return hash_value
+                except Exception as e:
+                    logger.error(f"SQLite备用查询失败: {e}")
+        
+        logger.debug(f"哈希值未找到: {uri}")
+        return None
 
     @classmethod
     def preload_cache_for_multiprocess(cls, cache_dict: Dict[str, str]) -> None:
         """为多进程环境预加载缓存
         
         Args:
-            cache_dict: 预加载的缓存字典
-        """
+            cache_dict: 预加载的缓存字典        """
         MULTIPROCESS_CONFIG['preload_cache'] = cache_dict
         logger.info(f"已预加载缓存，共 {len(cache_dict)} 个条目")
-
+    
     @classmethod
-    def configure_multiprocess(cls, enable_auto_save: bool = False, 
+    def configure_multiprocess(cls, enable_auto_save: bool = False,
                              enable_global_cache: bool = True,
-                             preload_cache: Optional[Dict[str, str]] = None) -> None:
+                             preload_cache: Optional[Dict[str, str]] = None,
+                             use_sqlite: bool = True,
+                             sqlite_priority: bool = True) -> None:
         """配置多进程环境
         
         Args:
             enable_auto_save: 是否启用自动保存（多进程下建议关闭）
             enable_global_cache: 是否启用全局缓存查询
             preload_cache: 预加载的缓存字典
+            use_sqlite: 是否启用SQLite存储
+            sqlite_priority: SQLite查询是否优先于内存缓存
         """
         MULTIPROCESS_CONFIG.update({
             'enable_auto_save': enable_auto_save,
             'enable_global_cache': enable_global_cache,
-            'preload_cache': preload_cache
+            'preload_cache': preload_cache,
+            'use_sqlite': use_sqlite,
+            'sqlite_priority': sqlite_priority
         })
-        logger.info(f"多进程配置已更新: auto_save={enable_auto_save}, global_cache={enable_global_cache}")
+        logger.info(f"多进程配置已更新: auto_save={enable_auto_save}, global_cache={enable_global_cache}, "
+                   f"sqlite={use_sqlite}, sqlite_priority={sqlite_priority}")
 
+    @classmethod
+    def migrate_to_sqlite(cls, force_refresh: bool = False) -> int:
+        """将JSON缓存数据迁移到SQLite
+        
+        Args:
+            force_refresh: 是否强制刷新缓存
+            
+        Returns:
+            int: 迁移的记录数
+        """
+        sqlite_db = cls._get_sqlite_db()
+        if not sqlite_db:
+            logger.error("SQLite数据库未初始化，无法执行迁移")
+            return 0
+        
+        total_migrated = 0
+        
+        try:
+            # 1. 从JSON文件迁移
+            for json_file in GLOBAL_HASH_FILES:
+                if os.path.exists(json_file):
+                    count = sqlite_db.migrate_from_json(json_file)
+                    total_migrated += count
+                    logger.info(f"从 {json_file} 迁移了 {count} 条记录")
+            
+            # 2. 从内存缓存迁移
+            if force_refresh:
+                cls.refresh_cache()
+            
+            cache = cls.get_cache()
+            if cache:
+                # 将内存缓存转换为SQLite记录格式
+                records = []
+                for uri, hash_value in cache.items():
+                    records.append((uri, hash_value, {}))  # 空元数据
+                
+                count = sqlite_db.batch_add_hashes(records)
+                total_migrated += count
+                logger.info(f"从内存缓存迁移了 {count} 条记录")
+            
+            logger.info(f"SQLite迁移完成，总共迁移 {total_migrated} 条记录")
+            return total_migrated
+            
+        except Exception as e:
+            logger.error(f"SQLite迁移失败: {e}")
+            return 0
+
+    @classmethod
+    def export_sqlite_to_json(cls, output_file: str = None, format_type: str = 'new') -> bool:
+        """将SQLite数据导出到JSON格式（兼容性支持）
+        
+        Args:
+            output_file: 输出文件路径，None使用默认路径
+            format_type: 格式类型 ('new' 或 'old')
+            
+        Returns:
+            bool: 是否导出成功
+        """
+        sqlite_db = cls._get_sqlite_db()
+        if not sqlite_db:
+            logger.error("SQLite数据库未初始化")
+            return False
+        
+        if output_file is None:
+            output_file = GLOBAL_HASH_FILES[0].replace('.json', '_exported.json')
+        
+        try:
+            success = sqlite_db.export_to_json(output_file, format_type)
+            if success:
+                logger.info(f"SQLite数据已导出到 {output_file}")
+            return success
+        except Exception as e:
+            logger.error(f"导出SQLite数据失败: {e}")
+            return False
+
+    @classmethod
+    def get_database_statistics(cls) -> Dict[str, any]:
+        """获取数据库统计信息"""
+        stats = {
+            'memory_cache': cls.get_cache_stats(),
+            'sqlite': None
+        }
+        
+        sqlite_db = cls._get_sqlite_db()
+        if sqlite_db:
+            try:
+                stats['sqlite'] = sqlite_db.get_statistics()
+            except Exception as e:
+                logger.error(f"获取SQLite统计信息失败: {e}")
+                stats['sqlite'] = {'error': str(e)}
+        
+        return stats
+
+    @classmethod
+    def smart_query_with_formats(cls, uri: str, target_formats: List[str] = None) -> List[Dict[str, any]]:
+        """智能查询，支持格式转换匹配
+        
+        Args:
+            uri: 查询的URI
+            target_formats: 目标格式列表，如 ['jpg', 'png', 'webp']
+            
+        Returns:
+            List[Dict]: 匹配的记录列表，按优先级排序
+        """
+        sqlite_db = cls._get_sqlite_db()
+        if not sqlite_db:
+            return []
+        try:
+            # 使用SQLite的智能查询功能
+            hash_value = sqlite_db.smart_query(uri)
+            if hash_value:
+                logger.debug(f"智能查询 {uri} 找到哈希值: {hash_value}")
+                return [{'uri': uri, 'hash_value': hash_value}]
+            return []
+        except Exception as e:
+            logger.error(f"智能查询失败: {e}")
+            return []
+    
     @classmethod
     def get_cache_stats(cls) -> Dict[str, any]:
         """获取缓存统计信息"""
         with _cache_lock:
-            return {
+            stats = {
                 'cache_size': len(cls._cache),
                 'initialized': cls._initialized,
                 'last_refresh': cls._last_refresh,
                 'last_save': cls._last_save,
                 'hash_counter': cls._hash_counter,
-                'multiprocess_config': MULTIPROCESS_CONFIG.copy()
+                'multiprocess_config': MULTIPROCESS_CONFIG.copy(),
+                'sqlite_enabled': cls._sqlite_db is not None
             }
+            
+            # 如果SQLite可用，添加SQLite统计信息
+            if cls._sqlite_db:
+                try:
+                    sqlite_stats = cls._sqlite_db.get_statistics()
+                    stats['sqlite_stats'] = sqlite_stats
+                except Exception as e:
+                    stats['sqlite_error'] = str(e)
+            
+            return stats
 
 class ImgUtils:
     """图片工具类"""
@@ -383,7 +579,7 @@ class ImageHashCalculator:
             logger.warning(f"[#update_log]查询哈希失败 {url}: {e}")
             return None    @staticmethod
     def calculate_phash(image_path_or_data, hash_size=10, url=None, auto_save=True, use_preload=False):
-        """使用感知哈希算法计算图片哈希值
+        """使用感知哈希算法计算图片哈希值（SQLite + JSON双存储优化版本）
         
         Args:
             image_path_or_data: 可以是图片路径(str/Path)、BytesIO对象、bytes对象或PIL.Image对象
@@ -398,6 +594,8 @@ class ImageHashCalculator:
                 'hash': str,  # 16进制格式的感知哈希值
                 'size': int,  # 哈希大小
                 'url': str,   # 标准化的URI
+                'from_cache': bool,  # 是否来自缓存
+                'storage_backend': str,  # 存储后端 ('sqlite', 'json', 'memory')
             }
         """
         try:
@@ -406,19 +604,29 @@ class ImageHashCalculator:
                 path_str = str(image_path_or_data)
                 url = PathURIGenerator.generate(path_str)
             
-            # 优先从缓存查询（支持多进程预加载缓存）
+            # 优先从缓存查询（支持多进程预加载缓存和SQLite智能查询）
             if url and MULTIPROCESS_CONFIG.get('enable_global_cache', True):
                 if use_preload:
                     cached_hash = HashCache.get_hash(url, use_preload=True)
                 else:
-                    cached_hash = ImageHashCalculator.get_hash_from_url(url)
+                    cached_hash = HashCache.get_hash_from_url(url)
                     
                 if cached_hash:
+                    # 判断哈希来源的存储后端
+                    storage_backend = 'memory'
+                    if MULTIPROCESS_CONFIG.get('use_sqlite', True):
+                        storage_backend = 'sqlite'
+                    elif MULTIPROCESS_CONFIG.get('preload_cache'):
+                        storage_backend = 'preload'
+                    else:
+                        storage_backend = 'json'
+                    
                     return {
                         'hash': cached_hash,
                         'size': HASH_PARAMS['hash_size'],
                         'url': url,
-                        'from_cache': True
+                        'from_cache': True,
+                        'storage_backend': storage_backend
                     }
             
             # 如果缓存中没有，则计算新的哈希值
@@ -428,13 +636,39 @@ class ImageHashCalculator:
                 url = PathURIGenerator.generate(path_str)  # 使用新类生成URI
                 logger.debug(f"[#hash_calc]正在计算URI: {url} 的哈希值")
             
+            # 收集图片元数据
+            image_metadata = {}
+            file_size = None
+            image_dimensions = None
+            file_times = {}
+            
             # 根据输入类型选择不同的打开方式
             if isinstance(image_path_or_data, (str, Path)):
                 pil_img = Image.open(image_path_or_data)
+                # 获取文件元数据
+                try:
+                    file_stat = os.stat(image_path_or_data)
+                    file_size = file_stat.st_size
+                    file_times = {
+                        'created': file_stat.st_ctime,
+                        'modified': file_stat.st_mtime,
+                        'accessed': file_stat.st_atime
+                    }
+                except:
+                    pass
             elif isinstance(image_path_or_data, BytesIO):
                 pil_img = Image.open(image_path_or_data)
+                # 尝试获取BytesIO的大小
+                try:
+                    current_pos = image_path_or_data.tell()
+                    image_path_or_data.seek(0, 2)  # 移到末尾
+                    file_size = image_path_or_data.tell()
+                    image_path_or_data.seek(current_pos)  # 恢复位置
+                except:
+                    pass
             elif isinstance(image_path_or_data, bytes):
                 pil_img = Image.open(BytesIO(image_path_or_data))
+                file_size = len(image_path_or_data)
             elif isinstance(image_path_or_data, Image.Image):
                 pil_img = image_path_or_data
             elif hasattr(image_path_or_data, 'read') and hasattr(image_path_or_data, 'seek'):
@@ -452,10 +686,19 @@ class ImageHashCalculator:
                         content = image_path_or_data.read()  # 读取全部内容
                         image_path_or_data.seek(position)  # 恢复位置
                         pil_img = Image.open(BytesIO(content))
+                        file_size = len(content)
                     except Exception as e2:
                         raise ValueError(f"无法从类文件对象读取图片数据: {e2}")
             else:
                 raise ValueError(f"不支持的输入类型: {type(image_path_or_data)}")
+            
+            # 获取图片尺寸
+            if pil_img:
+                image_dimensions = (pil_img.width, pil_img.height)
+                image_metadata['width'] = pil_img.width
+                image_metadata['height'] = pil_img.height
+                image_metadata['mode'] = pil_img.mode
+                image_metadata['format'] = getattr(pil_img, 'format', None)
             
             # 使用imagehash库的phash实现
             hash_obj = imagehash.phash(pil_img, hash_size=hash_size)
@@ -470,18 +713,27 @@ class ImageHashCalculator:
             if not hash_str:
                 raise ValueError("生成的哈希值为空")
                 
-            # 将新结果添加到缓存（支持多进程配置）
+            # 将新结果添加到缓存（支持SQLite和JSON双存储）
             if url and MULTIPROCESS_CONFIG.get('enable_global_cache', True):
+                # 准备元数据
+                metadata = {
+                    'file_size': file_size,
+                    'calculated_time': time.time(),
+                    **image_metadata
+                }
+                
                 # 在多进程环境下，根据配置决定是否自动保存
                 save_enabled = MULTIPROCESS_CONFIG.get('enable_auto_save', True) and auto_save
-                HashCache.add_hash(url, hash_str, auto_sync=save_enabled)
+                HashCache.add_hash(url, hash_str, auto_sync=save_enabled, metadata=metadata)
                 
             logger.debug(f"计算的哈希值: {hash_str}")
             return {
                 'hash': hash_str,
                 'size': hash_size,
                 'url': url,
-                'from_cache': False
+                'from_cache': False,
+                'storage_backend': 'computed',
+                'metadata': image_metadata
             }
             
         except Exception as e:
