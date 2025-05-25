@@ -37,32 +37,26 @@ __all__ = [
 # 导入SQLite存储模块
 from hashu.core.sqlite_storage import HashDatabaseManager, get_database_instance
 
+# 导入配置管理器
+from hashu.config import get_config
+
 # 多进程同步锁
 import threading
 _cache_lock = threading.RLock()  # 使用递归锁防止死锁
 
-# 全局配置
-GLOBAL_HASH_FILES = [
-    os.path.expanduser(r"E:\1EHV\image_hashes_collection.json"),
-    os.path.expanduser(r"E:\1EHV\image_hashes_global.json")
-]
-CACHE_TIMEOUT = 1800  # 缓存超时时间(秒)
-HASH_FILES_LIST=os.path.expanduser(r"E:\1EHV\hash_files_list.txt")
+# 获取配置管理器实例
+_config = get_config()
+
+# 全局配置（保持向后兼容性）
+GLOBAL_HASH_FILES = _config.get_json_hash_files()
+CACHE_TIMEOUT = _config.get_cache_timeout()
+HASH_FILES_LIST = _config.get_json_hash_files()
 
 # 哈希计算参数
-HASH_PARAMS = {
-    'hash_size': 10,  # 默认哈希大小
-    'hash_version': 1  # 哈希版本号，用于后续兼容性处理
-}
+HASH_PARAMS = _config.get_hash_params()
 
 # 多进程优化配置
-MULTIPROCESS_CONFIG = {
-    'enable_auto_save': True,  # 是否启用自动保存（多进程环境下建议关闭）
-    'enable_global_cache': True,  # 是否启用全局缓存查询
-    'preload_cache': None,  # 预加载的缓存字典，用于多进程环境
-    'use_sqlite': True,  # 是否启用SQLite存储
-    'sqlite_priority': True,  # SQLite查询优先级是否高于JSON缓存
-}
+MULTIPROCESS_CONFIG = _config.get_multiprocess_config()
 
 class HashCache:
     """哈希值缓存管理类（SQLite + JSON双存储优化版本）"""
@@ -197,7 +191,7 @@ class HashCache:
             should_save_by_time = (current_time - cls._last_save > 300)  # 5分钟保存一次
             should_save_by_count = (cls._hash_counter >= 10)  # 累积10个新哈希值保存一次
             
-            if force or should_save_by_time or should_save_by_count:
+            if force or should_save_by_time or should_save_by_count:                
                 try:
                     logger.info(f"同步哈希缓存到文件, 共{len(cls._cache)}个条目 [计数:{cls._hash_counter}, 间隔:{int(current_time-cls._last_save)}秒]")
                     ImageHashCalculator.save_global_hashes(cls._cache)
@@ -208,7 +202,9 @@ class HashCache:
                     logger.error(f"同步缓存到文件失败: {e}")
                     return False
             
-            return False    @classmethod
+            return False
+    
+    @classmethod
     def add_hash(cls, uri: str, hash_value: str, auto_sync: bool = True, metadata: Dict[str, any] = None):
         """添加哈希值到缓存（支持SQLite和JSON双存储）
         

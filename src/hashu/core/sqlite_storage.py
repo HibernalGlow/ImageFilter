@@ -22,10 +22,18 @@ class HashDatabaseManager:
         """初始化数据库管理器
         
         Args:
-            db_path: 数据库文件路径，默认为用户目录下的hash_database.db
+            db_path: 数据库文件路径，默认从配置管理器获取
         """
         if db_path is None:
-            db_path = os.path.expanduser("~/hash_database.db")
+            # 从配置管理器获取默认数据库路径
+            try:
+                from hashu.config import get_config
+                config = get_config()
+                primary_db = config.get_primary_sqlite_database()
+                db_path = primary_db if primary_db else os.path.expanduser("~/hash_database.db")
+            except ImportError:
+                # 向后兼容：如果配置管理器不可用，使用默认路径
+                db_path = os.path.expanduser("~/hash_database.db")
         
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
