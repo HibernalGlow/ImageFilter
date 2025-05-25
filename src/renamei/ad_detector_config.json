@@ -27,5 +27,9 @@
         ".jxl", 
         ".tiff", 
         ".tif"
-    ]
+    ],    
+    "thresholds": {
+        "max_delete_percentage": 0.5,
+        "description": "最大删除比例阈值：当广告图片占总图片数的比例超过此值时，将取消删除操作以防止误删除"
+    }
 }

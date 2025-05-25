@@ -1,18 +1,166 @@
+"""
+多进程哈希计算配置和优化工具
+"""
 import os
 import subprocess
+import threading
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict, List
 import dotenv
 from loguru import logger
+
 dotenv.load_dotenv()
-# 常量配置
-SCRIPTS_DIR = Path(os.getenv("SCRIPTS_DIR"))
-PROJECT_ROOT = Path(os.getenv("PROJECT_ROOT"))
+
+# 导入HashCache用于多进程配置
+try:
+    from hashu.core.calculate_hash_custom import HashCache, MULTIPROCESS_CONFIG
+except ImportError:
+    # 如果导入失败，创建一个占位符
+    class HashCache:
+        @classmethod
+        def configure_multiprocess(cls, **kwargs):
+            pass
+        @classmethod
+        def preload_cache_for_multiprocess(cls, cache_dict):
+            pass
+    MULTIPROCESS_CONFIG = {}
+
+class MultiProcessHashOptimizer:
+    """多进程哈希计算优化器"""
+    
+    def __init__(self):
+        self._preloaded_cache = None
+        self._lock = threading.Lock()
+    
+    def setup_multiprocess_environment(self, 
+                                     enable_auto_save: bool = False,
+                                     enable_global_cache: bool = True,
+                                     preload_cache_from_files: bool = True) -> None:
+        """设置多进程环境
+        
+        Args:
+            enable_auto_save: 是否启用自动保存（多进程下建议关闭）
+            enable_global_cache: 是否启用全局缓存查询
+            preload_cache_from_files: 是否预加载缓存文件
+        """
+        with self._lock:
+            # 预加载缓存
+            preload_cache = None
+            if preload_cache_from_files:
+                preload_cache = self._load_all_hash_files()
+            
+            # 配置HashCache
+            HashCache.configure_multiprocess(
+                enable_auto_save=enable_auto_save,
+                enable_global_cache=enable_global_cache,
+                preload_cache=preload_cache
+            )
+            
+            logger.info(f"✅ 多进程环境已配置: auto_save={enable_auto_save}, "
+                       f"global_cache={enable_global_cache}, "
+                       f"preload_cache={'有' if preload_cache else '无'}")
+    
+    def _load_all_hash_files(self) -> Dict[str, str]:
+        """加载所有哈希文件到内存"""
+        try:
+            from hashu.core.calculate_hash_custom import GLOBAL_HASH_FILES
+            import orjson
+            
+            all_hashes = {}
+            loaded_count = 0
+            
+            for hash_file in GLOBAL_HASH_FILES:
+                if not os.path.exists(hash_file):
+                    continue
+                    
+                try:
+                    with open(hash_file, 'rb') as f:
+                        data = orjson.loads(f.read())
+                    
+                    # 处理不同格式的哈希文件
+                    if "hashes" in data:
+                        # 新格式
+                        hashes = data["hashes"]
+                        for uri, hash_data in hashes.items():
+                            if isinstance(hash_data, dict):
+                                if hash_str := hash_data.get('hash'):
+                                    all_hashes[uri] = hash_str
+                            else:
+                                all_hashes[uri] = str(hash_data)
+                    else:
+                        # 旧格式
+                        special_keys = {'_hash_params', 'dry_run', 'input_paths'}
+                        for k, v in data.items():
+                            if k not in special_keys:
+                                if isinstance(v, dict):
+                                    if hash_str := v.get('hash'):
+                                        all_hashes[k] = hash_str
+                                else:
+                                    all_hashes[k] = str(v)
+                    
+                    loaded_count += 1
+                    
+                except Exception as e:
+                    logger.warning(f"加载哈希文件失败 {hash_file}: {e}")
+                    continue
+            
+            if all_hashes:
+                logger.info(f"✅ 预加载了 {len(all_hashes)} 个哈希值，来源: {loaded_count} 个文件")
+                self._preloaded_cache = all_hashes
+                return all_hashes
+            else:
+                logger.warning("❌ 未能预加载任何哈希值")
+                return {}
+                
+        except Exception as e:
+            logger.error(f"❌ 预加载哈希文件失败: {e}")
+            return {}
+    
+    def get_preloaded_cache(self) -> Dict[str, str]:
+        """获取预加载的缓存"""
+        return self._preloaded_cache or {}
+    
+    def configure_for_single_process(self) -> None:
+        """配置单进程环境（恢复默认设置）"""
+        HashCache.configure_multiprocess(
+            enable_auto_save=True,
+            enable_global_cache=True,
+            preload_cache=None
+        )
+        logger.info("✅ 已恢复单进程环境配置")
+
+# 全局优化器实例
+multiprocess_optimizer = MultiProcessHashOptimizer()
+
+# 兼容性接口
+def setup_multiprocess_hash_environment(**kwargs):
+    """设置多进程哈希计算环境的便捷函数"""
+    return multiprocess_optimizer.setup_multiprocess_environment(**kwargs)
+
+def get_multiprocess_hash_config():
+    """获取当前多进程配置"""
+    return MULTIPROCESS_CONFIG.copy()
+
+# 常量配置 - 添加默认值处理
+SCRIPTS_DIR = Path(os.getenv("SCRIPTS_DIR", "."))  # 默认为当前目录
+PROJECT_ROOT = Path(os.getenv("PROJECT_ROOT", "."))  # 默认为当前目录
 HASH_FILES_LIST = os.path.expanduser(r"E:\1EHV\hash_files_list.txt")
 
-HASH_SCRIPT = SCRIPTS_DIR / "comic" / "hash_prepare.py"
-DEDUP_SCRIPT = SCRIPTS_DIR / "fliter" / "batch_img_filter.py"
-PYTHON_EXECUTABLE = PROJECT_ROOT / ".venv" / "Scripts" / "python.exe"
+# 检查关键路径是否存在，如果不存在则使用相对路径
+if SCRIPTS_DIR.exists():
+    HASH_SCRIPT = SCRIPTS_DIR / "comic" / "hash_prepare.py"
+    DEDUP_SCRIPT = SCRIPTS_DIR / "fliter" / "batch_img_filter.py"
+else:
+    # 使用相对于当前项目的路径
+    HASH_SCRIPT = None
+    DEDUP_SCRIPT = None
+
+if PROJECT_ROOT.exists():
+    PYTHON_EXECUTABLE = PROJECT_ROOT / ".venv" / "Scripts" / "python.exe"
+else:    # 使用当前Python解释器
+    import sys
+    PYTHON_EXECUTABLE = Path(sys.executable)
+
 def get_latest_hash_file_path() -> Optional[str]:
     """获取最新的哈希文件路径
     

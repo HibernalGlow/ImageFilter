@@ -33,6 +33,10 @@ __all__ = [
     'ImageHashCalculator',
     'HashCache',
 ]
+
+# 多进程同步锁
+import threading
+_cache_lock = threading.RLock()  # 使用递归锁防止死锁
 # 全局配置
 GLOBAL_HASH_FILES = [
     os.path.expanduser(r"E:\1EHV\image_hashes_collection.json"),
@@ -46,8 +50,15 @@ HASH_PARAMS = {
     'hash_version': 1  # 哈希版本号，用于后续兼容性处理
 }
 
+# 多进程优化配置
+MULTIPROCESS_CONFIG = {
+    'enable_auto_save': True,  # 是否启用自动保存（多进程环境下建议关闭）
+    'enable_global_cache': True,  # 是否启用全局缓存查询
+    'preload_cache': None,  # 预加载的缓存字典，用于多进程环境
+}
+
 class HashCache:
-    """哈希值缓存管理类（单例模式）"""
+    """哈希值缓存管理类（优化多进程支持）"""
     _instance = None
     _cache = {}
     _initialized = False
@@ -56,40 +67,50 @@ class HashCache:
     _hash_counter = 0  # 新增：哈希计算计数器
 
     def __new__(cls):
-        if not cls._instance:
-            cls._instance = super().__new__(cls)
-        return cls._instance
+        """线程安全的单例模式"""
+        with _cache_lock:
+            if not cls._instance:
+                cls._instance = super().__new__(cls)
+            return cls._instance
 
     @classmethod
-    def get_cache(cls):
-        """获取内存中的缓存数据"""
-        current_time = time.time()
+    def get_cache(cls, use_preload: bool = False):
+        """获取内存中的缓存数据
         
-        # 如果未初始化或者距离上次刷新超过超时时间，则刷新缓存
-        if not cls._initialized or (current_time - cls._last_refresh > CACHE_TIMEOUT):
-            cls.refresh_cache()
-            
-        return cls._cache
-    
+        Args:
+            use_preload: 是否使用预加载缓存（多进程环境下推荐）
+        """
+        with _cache_lock:
+            # 多进程环境下优先使用预加载缓存
+            if use_preload and MULTIPROCESS_CONFIG.get('preload_cache'):
+                return MULTIPROCESS_CONFIG['preload_cache']
+                
+            current_time = time.time()
+              # 如果未初始化或者距离上次刷新超过超时时间，则刷新缓存
+            if not cls._initialized or (current_time - cls._last_refresh > CACHE_TIMEOUT):
+                cls.refresh_cache()
+            return cls._cache.copy()  # 返回副本避免并发修改
+
     @classmethod
     def refresh_cache(cls):
-        """刷新缓存并保持内存驻留"""
-        try:
-            new_cache = {}
-            loaded_files = []
-            
-            for hash_file in GLOBAL_HASH_FILES:
-                try:
-                    if not os.path.exists(hash_file):
-                        logger.debug(f"哈希文件不存在: {hash_file}")
-                        continue
-                        
-                    with open(hash_file, 'rb') as f:
-                        data = orjson.loads(f.read())
-                        if not data:
-                            logger.debug(f"哈希文件为空: {hash_file}")
+        """刷新缓存并保持内存驻留（多进程优化版本）"""
+        with _cache_lock:
+            try:
+                new_cache = {}
+                loaded_files = []
+                
+                for hash_file in GLOBAL_HASH_FILES:
+                    try:
+                        if not os.path.exists(hash_file):
+                            logger.debug(f"哈希文件不存在: {hash_file}")
                             continue
                             
+                        with open(hash_file, 'rb') as f:
+                            data = orjson.loads(f.read())
+                            if not data:
+                                logger.debug(f"哈希文件为空: {hash_file}")
+                                continue
+                        
                         # 处理新格式 (image_hashes_collection.json)
                         if "hashes" in data:
                             hashes = data["hashes"]
@@ -103,9 +124,8 @@ class HashCache:
                                         new_cache[uri] = hash_str
                                 else:
                                     new_cache[uri] = str(hash_data)
-                                    
-                        # 处理旧格式 (image_hashes_global.json)
                         else:
+                            # 处理旧格式 (image_hashes_global.json)
                             # 排除特殊键
                             special_keys = {'_hash_params', 'dry_run', 'input_paths'}
                             for k, v in data.items():
@@ -117,25 +137,27 @@ class HashCache:
                                         new_cache[k] = str(v)
                                         
                         loaded_files.append(hash_file)
-                        logger.debug(f"从 {hash_file} 加载了 {len(new_cache) - len(cls._cache)} 个新哈希值")
+                        logger.debug(f"从 {hash_file} 加载了哈希值")
+                                
+                    except Exception as e:
+                        logger.error(f"加载哈希文件失败 {hash_file}: {e}")
+                        continue
                         
-                except Exception as e:
-                    logger.error(f"加载哈希文件失败 {hash_file}: {e}")
-                    continue
+                if loaded_files:
+                    cls._cache = new_cache  # 直接替换引用保证原子性
+                    cls._initialized = True
+                    cls._last_refresh = time.time()
+                    logger.debug(f"哈希缓存已更新，共 {len(cls._cache)} 个条目，来源: {loaded_files}")
+                else:
+                    logger.warning("没有成功加载任何哈希文件")
+                    if not cls._initialized:
+                        cls._cache = {}  # 如果是首次初始化失败，确保有一个空缓存
+                        cls._initialized = True
                     
-            if loaded_files:
-                cls._cache = new_cache  # 直接替换引用保证原子性
-                cls._initialized = True
-                cls._last_refresh = time.time()
-                # logger.info(f"哈希缓存已更新，共 {len(cls._cache)} 个条目")
-            else:
-                logger.warning("没有成功加载任何哈希文件")
-                
-        except Exception as e:
-            logger.error(f"刷新哈希缓存失败: {e}")
-            if not cls._initialized:
-                cls._cache = {}  # 如果是首次初始化失败，确保有一个空缓存
-            # 保持现有缓存不变
+            except Exception as e:
+                logger.error(f"刷新哈希缓存失败: {e}")
+                if not cls._initialized:
+                    cls._cache = {}  # 如果是首次初始化失败，确保有一个空缓存                    cls._initialized = True
 
     @classmethod
     def sync_to_file(cls, force=False):
@@ -147,30 +169,122 @@ class HashCache:
         Returns:
             bool: 是否执行了保存操作
         """
-        current_time = time.time()
-        should_save_by_time = (current_time - cls._last_save > 300)  # 5分钟保存一次
-        should_save_by_count = (cls._hash_counter >= 10)  # 累积10个新哈希值保存一次
+        # 多进程环境下如果禁用自动保存，则直接返回
+        if not MULTIPROCESS_CONFIG.get('enable_auto_save', True) and not force:
+            return False
+            
+        with _cache_lock:
+            current_time = time.time()
+            should_save_by_time = (current_time - cls._last_save > 300)  # 5分钟保存一次
+            should_save_by_count = (cls._hash_counter >= 10)  # 累积10个新哈希值保存一次
+            
+            if force or should_save_by_time or should_save_by_count:
+                try:
+                    logger.info(f"同步哈希缓存到文件, 共{len(cls._cache)}个条目 [计数:{cls._hash_counter}, 间隔:{int(current_time-cls._last_save)}秒]")
+                    ImageHashCalculator.save_global_hashes(cls._cache)
+                    cls._last_save = current_time
+                    cls._hash_counter = 0  # 重置计数器
+                    return True
+                except Exception as e:
+                    logger.error(f"同步缓存到文件失败: {e}")
+                    return False
+            
+            return False
+
+    @classmethod
+    def add_hash(cls, uri: str, hash_value: str, auto_sync: bool = True):
+        """添加哈希值到缓存
         
-        if force or should_save_by_time or should_save_by_count:
-            logger.info(f"同步哈希缓存到文件, 共{len(cls._cache)}个条目 [计数:{cls._hash_counter}, 间隔:{int(current_time-cls._last_save)}秒]")
-            ImageHashCalculator.save_global_hashes(cls._cache)
-            cls._last_save = current_time
-            cls._hash_counter = 0  # 重置计数器
-            return True
+        Args:
+            uri: 标准化的URI
+            hash_value: 哈希值
+            auto_sync: 是否自动同步到文件
+        """
+        with _cache_lock:
+            cls._cache[uri] = hash_value
+            if auto_sync:
+                cls._hash_counter += 1
+                cls.sync_to_file()
+
+    @classmethod
+    def get_hash(cls, uri: str, use_preload: bool = False) -> Optional[str]:
+        """获取指定URI的哈希值
         
-        return False
+        Args:
+            uri: 标准化的URI
+            use_preload: 是否使用预加载缓存
+            
+        Returns:
+            Optional[str]: 哈希值，未找到返回None
+        """
+        cache = cls.get_cache(use_preload=use_preload)
+        return cache.get(uri)
+
+    @classmethod
+    def preload_cache_for_multiprocess(cls, cache_dict: Dict[str, str]) -> None:
+        """为多进程环境预加载缓存
+        
+        Args:
+            cache_dict: 预加载的缓存字典
+        """
+        MULTIPROCESS_CONFIG['preload_cache'] = cache_dict
+        logger.info(f"已预加载缓存，共 {len(cache_dict)} 个条目")
+
+    @classmethod
+    def configure_multiprocess(cls, enable_auto_save: bool = False, 
+                             enable_global_cache: bool = True,
+                             preload_cache: Optional[Dict[str, str]] = None) -> None:
+        """配置多进程环境
+        
+        Args:
+            enable_auto_save: 是否启用自动保存（多进程下建议关闭）
+            enable_global_cache: 是否启用全局缓存查询
+            preload_cache: 预加载的缓存字典
+        """
+        MULTIPROCESS_CONFIG.update({
+            'enable_auto_save': enable_auto_save,
+            'enable_global_cache': enable_global_cache,
+            'preload_cache': preload_cache
+        })
+        logger.info(f"多进程配置已更新: auto_save={enable_auto_save}, global_cache={enable_global_cache}")
+
+    @classmethod
+    def get_cache_stats(cls) -> Dict[str, any]:
+        """获取缓存统计信息"""
+        with _cache_lock:
+            return {
+                'cache_size': len(cls._cache),
+                'initialized': cls._initialized,
+                'last_refresh': cls._last_refresh,
+                'last_save': cls._last_save,
+                'hash_counter': cls._hash_counter,
+                'multiprocess_config': MULTIPROCESS_CONFIG.copy()
+            }
 
 class ImgUtils:
+    """图片工具类"""
     
+    @staticmethod
     def get_img_files(directory):
-        """获取目录中的所有图片文件"""
-        image_files = []
-        image_extensions = ('.jpg', '.jpeg', '.png', '.webp', '.jxl', '.avif', '.bmp')
+        """获取目录中的所有图片文件
         
-        for root, _, files in os.walk(directory):
-            for file in files:
-                if file.lower().endswith(image_extensions):
-                    image_files.append(os.path.join(root, file))
+        Args:
+            directory: 目录路径
+            
+        Returns:
+            list: 图片文件路径列表
+        """
+        image_files = []
+        image_extensions = ('.jpg', '.jpeg', '.png', '.webp', '.jxl', '.avif', '.bmp', '.gif', '.tiff')
+        
+        try:
+            for root, _, files in os.walk(directory):
+                for file in files:
+                    if file.lower().endswith(image_extensions):
+                        image_files.append(os.path.join(root, file))
+        except Exception as e:
+            logger.error(f"扫描目录失败 {directory}: {e}")
+            return []
                     
         return image_files
     
@@ -267,25 +381,24 @@ class ImageHashCalculator:
             
         except Exception as e:
             logger.warning(f"[#update_log]查询哈希失败 {url}: {e}")
-            return None
-
-    @staticmethod
-    def calculate_phash(image_path_or_data, hash_size=10, url=None, auto_save=True):
+            return None    @staticmethod
+    def calculate_phash(image_path_or_data, hash_size=10, url=None, auto_save=True, use_preload=False):
         """使用感知哈希算法计算图片哈希值
         
         Args:
             image_path_or_data: 可以是图片路径(str/Path)、BytesIO对象、bytes对象或PIL.Image对象
             hash_size: 哈希大小，默认值为10
             url: 图片的URL，用于记录来源。如果为None且image_path_or_data是路径，则使用标准化的URI
-            auto_save: 是否自动保存到全局文件
+            auto_save: 是否自动保存到全局文件（多进程环境下建议关闭）
+            use_preload: 是否使用预加载缓存（多进程环境下推荐开启）
             
         Returns:
             dict: 包含哈希值和元数据的字典，失败时返回None
-{
-                    'hash': str,  # 16进制格式的感知哈希值
-                    'size': int,  # 哈希大小
-                    'url': str,   # 标准化的URI
-                }
+            {
+                'hash': str,  # 16进制格式的感知哈希值
+                'size': int,  # 哈希大小
+                'url': str,   # 标准化的URI
+            }
         """
         try:
             # 生成标准化的URI
@@ -293,14 +406,20 @@ class ImageHashCalculator:
                 path_str = str(image_path_or_data)
                 url = PathURIGenerator.generate(path_str)
             
-            # 使用独立函数查询
-            if cached_hash := ImageHashCalculator.get_hash_from_url(url):
-                return {
-                    'hash': cached_hash,
-                    'size': HASH_PARAMS['hash_size'],
-                    'url': url,
-                    'from_cache': True
-                }
+            # 优先从缓存查询（支持多进程预加载缓存）
+            if url and MULTIPROCESS_CONFIG.get('enable_global_cache', True):
+                if use_preload:
+                    cached_hash = HashCache.get_hash(url, use_preload=True)
+                else:
+                    cached_hash = ImageHashCalculator.get_hash_from_url(url)
+                    
+                if cached_hash:
+                    return {
+                        'hash': cached_hash,
+                        'size': HASH_PARAMS['hash_size'],
+                        'url': url,
+                        'from_cache': True
+                    }
             
             # 如果缓存中没有，则计算新的哈希值
             # 如果没有提供URL且输入是路径，则生成标准化的URI
@@ -351,13 +470,11 @@ class ImageHashCalculator:
             if not hash_str:
                 raise ValueError("生成的哈希值为空")
                 
-            # 将新结果存入内存缓存
-            HashCache._cache[url] = hash_str
-            
-            # 新增：增加哈希计数器并尝试自动保存
-            if auto_save:
-                HashCache._hash_counter += 1
-                HashCache.sync_to_file()
+            # 将新结果添加到缓存（支持多进程配置）
+            if url and MULTIPROCESS_CONFIG.get('enable_global_cache', True):
+                # 在多进程环境下，根据配置决定是否自动保存
+                save_enabled = MULTIPROCESS_CONFIG.get('enable_auto_save', True) and auto_save
+                HashCache.add_hash(url, hash_str, auto_sync=save_enabled)
                 
             logger.debug(f"计算的哈希值: {hash_str}")
             return {
@@ -738,7 +855,7 @@ class ImageHashCalculator:
     def test_hash_cache():
         """缓存功能测试demo"""
         console = Console()
-        test_file = r"D:\1VSCODE\1ehv\pics\test\0.jpg"  # 替换为实际测试文件路径
+        test_file = r"E:\2EHV\test\0.jpg"  # 替换为实际测试文件路径
         url=ImageHashCalculator.normalize_path(test_file)
         # 第一次计算（应加载缓存）
         console.print("\n[bold cyan]=== 第一次计算（加载缓存）===[/]")
@@ -816,7 +933,7 @@ if __name__ == "__main__":
     # 原有清晰度测试保持不变
     def test_image_clarity():
         """清晰度评估测试demo"""
-        test_dir = Path(r"D:\1VSCODE\1ehv\pics\test")
+        test_dir = Path(r"E:\2EHV\test")
         console = Console()
         
         # 获取所有图片文件

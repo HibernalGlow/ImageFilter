@@ -1,9 +1,80 @@
 """URI 路径处理模块"""
 from pathlib import Path
-from typing import Tuple, Optional
+from typing import Tuple, Optional, Dict
 from urllib.parse import unquote
 import os
 from loguru import logger
+
+class URIParser:
+    """URI解析工具类"""
+    
+    @staticmethod
+    def parse_uri(uri: str) -> Dict[str, Optional[str]]:
+        """
+        解析URI获取详细信息
+        
+        Args:
+            uri: 标准化的URI
+            
+        Returns:
+            Dict: 包含文件名、格式、去掉格式的URL、压缩包名等信息
+        """
+        try:
+            result = {
+                'filename': None,
+                'file_format': None,
+                'uri_without_format': None,
+                'archive_name': None
+            }
+            
+            if uri.startswith('file:///'):
+                # 普通文件处理
+                file_path = unquote(uri[8:])  # 去掉file:///前缀
+                path_obj = Path(file_path)
+                
+                result['filename'] = path_obj.name
+                result['file_format'] = path_obj.suffix.lower().lstrip('.')
+                # 去掉格式的URL：移除文件扩展名
+                if result['file_format']:
+                    base_path = str(path_obj.with_suffix(''))
+                    result['uri_without_format'] = f"file:///{base_path}"
+                else:
+                    result['uri_without_format'] = uri
+                    
+            elif uri.startswith('archive:///'):
+                # 压缩包文件处理
+                archive_part = unquote(uri[11:])  # 去掉archive:///前缀
+                if '!' in archive_part:
+                    archive_path, internal_path = archive_part.split('!', 1)
+                    
+                    # 压缩包名
+                    result['archive_name'] = Path(archive_path).name
+                    
+                    # 内部文件信息
+                    if internal_path:
+                        internal_obj = Path(internal_path)
+                        result['filename'] = internal_obj.name
+                        result['file_format'] = internal_obj.suffix.lower().lstrip('.')
+                        
+                        # 去掉格式的URL：移除内部文件扩展名
+                        if result['file_format']:
+                            base_internal = str(internal_obj.with_suffix(''))
+                            result['uri_without_format'] = f"archive:///{archive_path}!{base_internal}"
+                        else:
+                            result['uri_without_format'] = uri
+                    else:
+                        result['uri_without_format'] = uri
+                        
+            return result
+            
+        except Exception as e:
+            logger.warning(f"URI解析失败 {uri}: {e}")
+            return {
+                'filename': None,
+                'file_format': None,
+                'uri_without_format': uri,  # 降级返回原URI
+                'archive_name': None
+            }
 
 class PathURIGenerator:
     @staticmethod

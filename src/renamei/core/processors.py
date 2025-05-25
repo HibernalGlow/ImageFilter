@@ -13,7 +13,6 @@ from loguru import logger
 
 class AdImageDetector:
     """广告图片检测器"""
-    
     def __init__(self, config_path=None):
         """初始化广告图片检测器
         
@@ -39,6 +38,9 @@ class AdImageDetector:
         ]
         self.image_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.avif', '.jxl', '.tiff', '.tif'}
         
+        # 默认阈值配置
+        self.max_delete_percentage = 0.5  # 最大删除比例阈值
+        
         # 尝试从配置文件加载
         if config_path is None:
             # 默认配置文件路径
@@ -49,7 +51,7 @@ class AdImageDetector:
         self.combined_regex = None
         if self.ad_regex_patterns:
             self.combined_regex = re.compile('|'.join(self.ad_regex_patterns))
-        logger.debug(f"广告图片检测器初始化完成，加载了{len(self.ad_keywords)}个关键词和{len(self.ad_regex_patterns)}个正则模式")
+        logger.debug(f"广告图片检测器初始化完成，加载了{len(self.ad_keywords)}个关键词和{len(self.ad_regex_patterns)}个正则模式，删除阈值:{self.max_delete_percentage}")
     
     def _load_config(self, config_path):
         """从配置文件加载广告匹配模式
@@ -79,6 +81,13 @@ class AdImageDetector:
                 if 'image_extensions' in config:
                     self.image_extensions = set(config['image_extensions'])
                     logger.info(f"从配置文件 {config_path} 加载了 {len(self.image_extensions)} 个图片扩展名")
+                
+                # 加载阈值配置
+                if 'thresholds' in config:
+                    thresholds = config['thresholds']
+                    if 'max_delete_percentage' in thresholds:
+                        self.max_delete_percentage = thresholds['max_delete_percentage']
+                        logger.info(f"从配置文件加载删除阈值: {self.max_delete_percentage}")
             else:
                 logger.warning(f"配置文件 {config_path} 不存在，使用默认配置")
         except Exception as e:

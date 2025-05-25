@@ -95,15 +95,14 @@ class ZipProcessor:
             
             if not ad_files:
                 return True  # 没有广告图片，处理成功
-            
-            # 统计图片总数
+              # 统计图片总数
             total_images = len([f for f in files if self.ad_detector._is_image_file(f)])
             delete_percentage = len(ad_files) / total_images if total_images > 0 else 0
             
             # 安全检查：防止误删除
-            if delete_percentage > 0.8:
+            if delete_percentage > self.ad_detector.max_delete_percentage:
                 logger.warning(f"检测到 {len(ad_files)} 个广告图片，占总图片数 {total_images} 的 {delete_percentage*100:.1f}%")
-                logger.warning("为防止误删除，已取消删除操作（删除比例超过80%）")
+                logger.warning(f"为防止误删除，已取消删除操作（删除比例超过{self.ad_detector.max_delete_percentage*100:.1f}%）")
                 return True
             
             # 创建回收站目录
