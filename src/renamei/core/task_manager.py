@@ -1,7 +1,7 @@
 """统计和进度管理器"""
 from threading import Lock
 from typing import List, Callable, Any
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 from rich.console import Console
 from rich.table import Table
@@ -85,7 +85,7 @@ class TaskManager:
         ) as progress:
             task = progress.add_task(task_description, total=total)
             
-            with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+            with ProcessPoolExecutor(max_workers=self.max_workers) as executor:
                 # 提交所有任务
                 future_to_item = {
                     executor.submit(worker_func, item, stats): item 

@@ -11,7 +11,7 @@ import time  # 添加time模块导入
 import hashlib
 from PIL import Image
 import io
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 from queue import Queue
 from threading import Lock
@@ -729,7 +729,7 @@ def process_with_threadpool(items, worker_func, max_workers=None):
     ) as progress:
         task = progress.add_task("处理文件...", total=total)
         
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        with ProcessPoolExecutor(max_workers=max_workers) as executor:
             # 添加统计对象到每个任务的参数中
             tasks = [executor.submit(worker_func, (*item, stats) if isinstance(item, tuple) else (item, stats)) 
                     for item in items]

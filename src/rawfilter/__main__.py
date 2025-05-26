@@ -26,7 +26,7 @@ from pathlib import Path
 from colorama import init, Fore, Style
 from typing import List, Dict, Set, Tuple, Optional, Union
 from opencc import OpenCC  # 用于繁简转换
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from hashu.core.calculate_hash_custom import ImageClarityEvaluator
 from textual_logger import TextualLoggerManager
 from rawfilter.core.number_shortener import shorten_number_cn
@@ -960,12 +960,11 @@ def process_directory(directory: str, report_generator: ReportGenerator, dry_run
     
     # 创建进程池进行并行处理
     logger.info("[#process] 🔄 开始处理文件组...")
-    
-    with ThreadPoolExecutor(max_workers=min(os.cpu_count() * 2, 8)) as executor:
-        # 创建任务列表
+
+    with ProcessPoolExecutor(max_workers=min(os.cpu_count() * 2, 8)) as executor:
         futures = []
         for _, group_files in groups.items():
-            if len(group_files) > 1:  # 只处理有多个版本的组
+            if len(group_files) > 1:
                 future = executor.submit(
                     process_file_group,
                     group_files,
@@ -976,14 +975,11 @@ def process_directory(directory: str, report_generator: ReportGenerator, dry_run
                     enable_multi_main
                 )
                 futures.append(future)
-        
-        # 更新组处理进度
         completed = 0
         for _ in as_completed(futures):
             completed += 1
             future_count = len(futures)
             scan_percent = completed / future_count * 100
-            
             logger.info("[@stats] 组进度: (%d/%d) %.2f%%", completed, future_count, scan_percent)
 
 def get_paths_from_clipboard():

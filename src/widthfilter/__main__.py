@@ -8,7 +8,7 @@ import pillow_avif
 import pillow_jxl
 import zipfile
 import io
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor
 import sys
 import warnings
 import subprocess
@@ -389,7 +389,7 @@ class ImageProcessor:
         moved_count = 0
         total_files = len(zip_files)
 
-        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+        with ProcessPoolExecutor(max_workers=self.max_workers) as executor:
             for zip_path, should_process in tqdm(
                 executor.map(self.process_single_zip, zip_files),
                 total=total_files,

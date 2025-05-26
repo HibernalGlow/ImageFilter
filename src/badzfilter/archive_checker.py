@@ -105,7 +105,7 @@ def process_directory(directory, skip_checked=False, max_workers=4):
         return result
 
     # 使用线程池处理文件
-    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+    with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
         # 使用enumerate获取索引，方便更新进度
         futures = [executor.submit(process_single_file, file_path, i) for i, file_path in enumerate(files_to_process)]
         

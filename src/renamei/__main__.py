@@ -8,7 +8,7 @@ import uuid
 import time
 import subprocess
 from datetime import datetime
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 from rich.console import Console
 from rich.panel import Panel
