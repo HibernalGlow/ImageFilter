@@ -86,7 +86,7 @@ class BackupHandler:
         zip_path: str,
         to_delete: Set[str],
         removal_reasons: Dict[str, Dict],
-        config: Dict = None
+        options: Dict = None
     ) -> Tuple[bool, str]:
         """
         备份并用7z删除压缩包内文件，无需解压，无需临时目录
@@ -94,7 +94,7 @@ class BackupHandler:
             zip_path: 压缩包路径
             to_delete: 压缩包内路径集合
             removal_reasons: {压缩包内路径: {reason: 原因}}
-            config: 可选，包含backup.enabled等
+            options: 配置字典（如backup.enabled、trash_folder_name等）
         Returns:
             (是否成功, 错误信息)
         """
@@ -103,8 +103,9 @@ class BackupHandler:
                 logger.info("[bakf]没有需要删除的图片")
                 return True, "没有需要删除的图片"
             # 备份
+            trash_folder_name = options.get('trash_folder_name', 'trash') if options else 'trash'
             backup_results = BackupHandler.backup_from_archive(
-                zip_path, to_delete, removal_reasons
+                zip_path, to_delete, removal_reasons, trash_folder_name=trash_folder_name
             )
             # delete.txt 路径
             delete_list_file = os.path.join(os.path.dirname(zip_path), '@delete.txt')
@@ -112,12 +113,12 @@ class BackupHandler:
                 f.write('\n'.join(to_delete))
             # 备份zip本体（可选）
             backup_enabled = False
-            if config:
-                if hasattr(config, '__dict__'):
-                    if hasattr(config, 'backup') and hasattr(config.backup, 'enabled'):
-                        backup_enabled = config.backup.enabled
+            if options:
+                if hasattr(options, '__dict__'):
+                    if hasattr(options, 'backup') and hasattr(options.backup, 'enabled'):
+                        backup_enabled = options.backup.enabled
                 else:
-                    backup_enabled = config.get('backup', {}).get('enabled', False)
+                    backup_enabled = options.get('backup', {}).get('enabled', False)
             if backup_enabled:
                 backup_success, backup_path = BackupHandler.backup_source_file(zip_path)
                 if backup_success:

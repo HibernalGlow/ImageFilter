@@ -101,8 +101,9 @@ class ZipProcessor:
                 return True
             removal_reasons = {f: {"reason": "ad"} for f in ad_files}
             to_delete = set(ad_files)
+            options = {"backup": {"enabled": True}}
             ok, msg = BackupHandler.process_archive_delete(
-                zip_path, to_delete, removal_reasons
+                zip_path, to_delete, removal_reasons, options
             )
             if ok:
                 logger.info(f"已从压缩包中删除 {len(ad_files)} 个广告图片")
@@ -126,8 +127,9 @@ class ZipProcessor:
             if hash_files:
                 removal_reasons = {f: {"reason": "hash"} for f in hash_files}
                 to_delete = set(hash_files)
+                options = {"backup": {"enabled": True}}
                 ok, msg = BackupHandler.process_archive_delete(
-                    zip_path, to_delete, removal_reasons
+                    zip_path, to_delete, removal_reasons, options
                 )
                 if not ok:
                     logger.error(f"删除hash文件失败: {msg}")
