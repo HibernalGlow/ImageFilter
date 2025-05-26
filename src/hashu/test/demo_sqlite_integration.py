@@ -8,8 +8,7 @@ import time
 from pathlib import Path
 from typing import List, Dict, Any
 
-from hashu.core.calculate_hash_custom import ImageHashCalculator, HashCache
-from hashu.core.sqlite_storage import get_database_instance
+from hashu.core.calculate_hash_custom import ImageHashCalculator, HashCache, get_db_cached
 from hashu.utils.hash_process_config import setup_multiprocess_hash_environment
 from loguru import logger
 
@@ -63,7 +62,7 @@ def demo_basic_hash_calculation():
         ]
         
         # 直接添加到数据库进行测试
-        db = get_database_instance()
+        db = get_db_cached()
         for i, uri in enumerate(test_uris):
             hash_value = f"test_hash_{i:04d}"
             metadata = {
@@ -108,7 +107,7 @@ def demo_smart_query():
     """演示智能查询功能（格式转换匹配）"""
     logger.info("\n=== 智能查询演示 ===")
     
-    db = get_database_instance()
+    db = get_db_cached()
     
     # 添加一些测试数据用于智能查询
     test_data = [
@@ -217,7 +216,7 @@ def demo_performance_comparison():
     ]
     
     # 添加测试数据
-    db = get_database_instance()
+    db = get_db_cached()
     for i, uri in enumerate(test_uris):
         hash_value = f"perf_test_{i:04d}"
         db.add_hash(uri, hash_value)

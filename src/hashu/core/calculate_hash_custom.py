@@ -35,7 +35,7 @@ __all__ = [
 ]
 
 # 导入SQLite存储模块
-from hashu.core.sqlite_storage import HashDatabaseManager, get_database_instance
+from hashu.core.sqlite_storage import HashDatabaseManager
 
 # 导入配置管理器
 from hashu.config import get_config
@@ -57,6 +57,11 @@ HASH_PARAMS = _config.get_hash_params()
 
 # 多进程优化配置
 MULTIPROCESS_CONFIG = _config.get_multiprocess_config()
+
+@lru_cache(maxsize=1)
+def get_db_cached():
+    from hashu.core.sqlite_storage import get_database_instance
+    return get_database_instance()
 
 class HashCache:
     """哈希值缓存管理类（SQLite + JSON双存储优化版本）"""
@@ -80,7 +85,7 @@ class HashCache:
         """获取SQLite数据库实例"""
         if cls._sqlite_db is None and MULTIPROCESS_CONFIG.get('use_sqlite', True):
             try:
-                cls._sqlite_db = get_database_instance()
+                cls._sqlite_db = get_db_cached()
                 logger.info("SQLite数据库已初始化")
             except Exception as e:
                 logger.error(f"初始化SQLite数据库失败: {e}")
@@ -223,6 +228,7 @@ class HashCache:
             if sqlite_db:
                 try:
                     sqlite_db.add_hash(uri, hash_value, metadata=metadata or {})
+                    sqlite_db._get_connection().commit()
                     logger.debug(f"哈希值已写入SQLite: {uri}")
                 except Exception as e:
                     logger.error(f"写入SQLite失败: {e}")
@@ -333,6 +339,7 @@ class HashCache:
             for json_file in GLOBAL_HASH_FILES:
                 if os.path.exists(json_file):
                     count = sqlite_db.migrate_from_json(json_file)
+                    sqlite_db._get_connection().commit()
                     total_migrated += count
                     logger.info(f"从 {json_file} 迁移了 {count} 条记录")
             
@@ -348,6 +355,7 @@ class HashCache:
                     records.append((uri, hash_value, {}))  # 空元数据
                 
                 count = sqlite_db.batch_add_hashes(records)
+                sqlite_db._get_connection().commit()
                 total_migrated += count
                 logger.info(f"从内存缓存迁移了 {count} 条记录")
             
@@ -379,6 +387,7 @@ class HashCache:
         
         try:
             success = sqlite_db.export_to_json(output_file, format_type)
+            sqlite_db._get_connection().commit()
             if success:
                 logger.info(f"SQLite数据已导出到 {output_file}")
             return success
@@ -530,31 +539,27 @@ class ImageHashCalculator:
             cached_hashes = HashCache.get_cache()
             if not cached_hashes:
                 logger.debug("[#hash_calc]哈希缓存为空")
-                return None
-                
-            if hash_value := cached_hashes.get(normalized_url):
-                logger.debug(f"[#hash_calc]从缓存找到哈希值: {normalized_url}")
-                return hash_value
-                
+            else:
+                if hash_value := cached_hashes.get(normalized_url):
+                    logger.debug(f"[#hash_calc]从缓存找到哈希值: {normalized_url}")
+                    return hash_value
+            
             # 未命中缓存时主动扫描全局文件
             for hash_file in GLOBAL_HASH_FILES:
                 if not os.path.exists(hash_file):
                     logger.debug(f"[#hash_calc]哈希文件不存在: {hash_file}")
                     continue
-                    
                 try:
                     with open(hash_file, 'rb') as f:
                         data = orjson.loads(f.read())
                         if not data:
                             logger.debug(f"[#hash_calc]哈希文件为空: {hash_file}")
                             continue
-                            
                         # 处理新旧格式
                         hashes = data.get('hashes', data) if 'hashes' in data else data
                         if not hashes:
                             logger.debug(f"[#hash_calc]哈希数据为空: {hash_file}")
                             continue
-                            
                         if hash_value := hashes.get(normalized_url):
                             if isinstance(hash_value, dict):
                                 hash_str = hash_value.get('hash')
@@ -567,13 +572,38 @@ class ImageHashCalculator:
                 except Exception as e:
                     logger.warning(f"[#update_log]读取哈希文件失败 {hash_file}: {e}")
                     continue
-            
+
+            # ------ 新增：压缩包同名不同路径共用哈希 ------
+            db = get_db_cached()
+            uri_info = db.parse_uri(normalized_url)
+            if uri_info.get('source_type') == 'archive' and uri_info.get('filename'):
+                filename = uri_info['filename']
+                try:
+                    conn = db._get_connection()
+                    cursor = conn.execute(
+                        "SELECT * FROM image_hashes WHERE filename = ? AND source_type = 'archive' ORDER BY calculated_time DESC",
+                        (filename,)
+                    )
+                    rows = cursor.fetchall()
+                except Exception as e:
+                    logger.error(f"[hash_calc] 数据库同名压缩包查询失败: {e}")
+                    rows = []
+                if rows:
+                    hash_value = rows[0]['hash_value']
+                    # 插入当前路径新记录
+                    db.add_hash(normalized_url, hash_value)
+                    logger.info(f"[hash_calc] 同名不同路径压缩包共用哈希: {filename} -> {hash_value}")
+                    return hash_value
+            # ------ 新增逻辑结束 ------
+
             logger.debug(f"[#hash_calc]未找到哈希值: {normalized_url}")
             return None
             
         except Exception as e:
             logger.warning(f"[#update_log]查询哈希失败 {url}: {e}")
-            return None    @staticmethod
+            return None
+
+    @staticmethod
     def calculate_phash(image_path_or_data, hash_size=10, url=None, auto_save=True, use_preload=False):
         """使用感知哈希算法计算图片哈希值（SQLite + JSON双存储优化版本）
         
