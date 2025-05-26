@@ -25,6 +25,7 @@ import os
 import sys
 from pathlib import Path
 from datetime import datetime
+from renamei.core.safe_exit import setup_safe_exit
 
 def setup_logger(app_name="app", project_root=None, console_output=True):
     """配置 Loguru 日志系统
@@ -91,6 +92,7 @@ console = Console()
 
 
 def main():
+    setup_safe_exit()  # 捕获Ctrl+C安全退出
     """主函数"""
     # 显示欢迎信息
     console.print(Panel(
