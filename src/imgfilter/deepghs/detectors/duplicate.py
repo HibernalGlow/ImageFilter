@@ -367,8 +367,7 @@ class DuplicateImageDetector:
         except Exception as e:
             logger.error(f"[#hash_calc]加载哈希文件失败: {e}")
             return {}
-              def _find_similar_images(self, images: List[str], archive_path: str = None, temp_dir: str = None, 
-                            image_archive_map: Dict[str, Union[str, Dict]] = None) -> List[List[str]]:
+    def _find_similar_images(self, images: List[str], archive_path: str = None, temp_dir: str = None,image_archive_map: Dict[str, Union[str, Dict]] = None) -> List[List[str]]:
         """查找相似的图片组"""
         similar_groups = []
         processed = set()
