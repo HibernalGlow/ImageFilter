@@ -145,24 +145,19 @@ class HashDatabaseManager:
                 # 解析archive://协议
                 # 格式: archive://path/to/archive.zip!/internal/path/image.jpg
                 result['source_type'] = 'archive'
-                
                 # 去掉协议前缀
                 path_part = uri[10:]  # 去掉 "archive://"
-                
                 if '!/' in path_part:
                     archive_path, internal_path = path_part.split('!/', 1)
                     result['archive_name'] = os.path.basename(archive_path)
-                    result['filename'] = os.path.basename(internal_path)
-                    
+                    result['filename'] = internal_path  # 这里直接用相对路径
                     # 构建base_uri (去掉扩展名)
-                    name_without_ext = os.path.splitext(result['filename'])[0]
+                    name_without_ext = os.path.splitext(os.path.basename(internal_path))[0]
                     result['base_uri'] = f"archive://{archive_path}!/{os.path.dirname(internal_path)}/{name_without_ext}".rstrip('/')
-                    
                 else:
                     # 没有内部路径的情况
                     result['filename'] = os.path.basename(path_part)
                     result['base_uri'] = f"archive://{os.path.splitext(path_part)[0]}"
-                    
             elif '://' in uri:
                 # 其他协议（如http, https等）
                 result['source_type'] = 'url'
