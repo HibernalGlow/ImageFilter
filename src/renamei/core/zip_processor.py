@@ -8,6 +8,7 @@ from .processors import (
     AdImageDetector, FileRenamer, DuplicateFileHandler, 
     TempDirectoryManager, CompressionTool, SevenZipTool, BandizipTool
 )
+from bakf.core.backup import BackupHandler
 
 
 class ZipProcessor:
@@ -85,104 +86,81 @@ class ZipProcessor:
     def _process_ad_images(self, zip_path: str, trash_dir: str) -> bool:
         """处理广告图片"""
         try:
-            # 获取文件列表
             tool = self._get_available_tool()
             if not tool:
                 return False
-            
             files = tool.list_files(zip_path)
             ad_files = [f for f in files if self.ad_detector.is_ad_image(f)]
-            
             if not ad_files:
                 return True  # 没有广告图片，处理成功
-              # 统计图片总数
             total_images = len([f for f in files if self.ad_detector._is_image_file(f)])
             delete_percentage = len(ad_files) / total_images if total_images > 0 else 0
-            
-            # 安全检查：防止误删除
             if delete_percentage > self.ad_detector.max_delete_percentage:
                 logger.warning(f"检测到 {len(ad_files)} 个广告图片，占总图片数 {total_images} 的 {delete_percentage*100:.1f}%")
                 logger.warning(f"为防止误删除，已取消删除操作（删除比例超过{self.ad_detector.max_delete_percentage*100:.1f}%）")
                 return True
-            
-            # 创建回收站目录
-            os.makedirs(trash_dir, exist_ok=True)
-            logger.info(f"创建回收站目录: {trash_dir}")
-            
-            # 解压整个压缩包到临时目录，然后复制广告图片到回收站
-            temp_dir = self.temp_manager.create_temp_dir()
-            if tool.extract(zip_path, temp_dir):
-                # 复制广告图片到回收站
-                for ad_file in ad_files:
-                    src_path = os.path.join(temp_dir, ad_file)
-                    if os.path.exists(src_path):
-                        dst_path = os.path.join(trash_dir, os.path.basename(ad_file))
-                        shutil.copy2(src_path, dst_path)
-                        logger.info(f"已提取广告图片到回收站: {ad_file}")
-                
-                # 从压缩包中删除广告图片
-                if tool.delete_files(zip_path, ad_files):
-                    logger.info(f"已从压缩包中删除 {len(ad_files)} 个广告图片")
-                    return True
-                else:
-                    logger.error("删除广告图片失败")
-                    return False
+            removal_reasons = {f: {"reason": "ad"} for f in ad_files}
+            to_delete = set(ad_files)
+            ok, msg = BackupHandler.process_archive_delete(
+                zip_path, to_delete, removal_reasons
+            )
+            if ok:
+                logger.info(f"已从压缩包中删除 {len(ad_files)} 个广告图片")
+                return True
             else:
-                logger.error("解压文件失败，无法提取广告图片")
+                logger.error(f"删除广告图片失败: {msg}")
                 return False
-                
         except Exception as e:
             logger.error(f"处理广告图片失败: {e}")
             return False
     
     def _process_file_renaming(self, zip_path: str, trash_dir: str) -> bool:
-        """处理文件重命名"""
+        """处理文件重命名和hash文件删除"""
         try:
             tool = self._get_available_tool()
             if not tool:
                 return False
-            
-            # 检查是否有需要重命名的文件
             files = tool.list_files(zip_path)
+            # 1. 先处理hash文件删除
+            hash_files = [f for f in files if '[hash-' in f]
+            if hash_files:
+                removal_reasons = {f: {"reason": "hash"} for f in hash_files}
+                to_delete = set(hash_files)
+                ok, msg = BackupHandler.process_archive_delete(
+                    zip_path, to_delete, removal_reasons
+                )
+                if not ok:
+                    logger.error(f"删除hash文件失败: {msg}")
+                    return False
+                files = tool.list_files(zip_path)
             has_hash_files = any('[hash-' in f for f in files)
-            
             if not has_hash_files:
                 logger.info("无需处理文件名，跳过重新打包")
                 return True
-            
-            # 解压到临时目录
-            temp_dir = self.temp_manager.create_temp_dir()
+            zip_dir = os.path.dirname(zip_path)
+            temp_dir = self.temp_manager.create_temp_dir(base_dir=zip_dir)
             if not tool.extract(zip_path, temp_dir):
                 logger.error("解压文件失败")
                 return False
-            
-            # 检查重复文件
             duplicate_files = self.duplicate_handler.find_duplicate_files(temp_dir)
             need_repack = False
-            
             if duplicate_files:
                 logger.info("检测到重名文件，开始处理")
                 os.makedirs(trash_dir, exist_ok=True)
                 dupes_trash_dir = os.path.join(trash_dir, "duplicates")
                 os.makedirs(dupes_trash_dir, exist_ok=True)
-                
                 if self.duplicate_handler.handle_duplicates(duplicate_files, temp_dir, dupes_trash_dir):
                     need_repack = True
                 else:
                     logger.error("处理重名文件失败")
                     return False
-            
-            # 重命名文件
             renamed_count = self._rename_files_in_directory(temp_dir)
             if renamed_count > 0:
                 need_repack = True
                 logger.info(f"重命名了 {renamed_count} 个文件")
-            
-            # 重新打包
             if need_repack:
                 if os.path.exists(zip_path):
                     os.remove(zip_path)
-                
                 if tool.create(zip_path, temp_dir):
                     logger.info(f"压缩包处理完成: {zip_path}")
                     return True
@@ -192,7 +170,6 @@ class ZipProcessor:
             else:
                 logger.info("无需修改，跳过重新打包")
                 return True
-                
         except Exception as e:
             logger.error(f"处理文件重命名失败: {e}")
             return False

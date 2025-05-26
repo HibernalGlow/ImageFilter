@@ -225,26 +225,22 @@ class DuplicateFileHandler:
 
 
 class TempDirectoryManager:
-    """临时目录管理器 - 使用固定目录代替临时目录"""
-    
+    """临时目录管理器 - 支持指定基础目录"""
     def __init__(self):
         self.temp_dirs = []
         self.base_dir = r"E:\2400EHV\extracted_archives"
-        # 确保基础目录存在
         os.makedirs(self.base_dir, exist_ok=True)
         logger.info(f"使用固定解压目录: {self.base_dir}")
-    
-    def create_temp_dir(self) -> str:
-        """创建临时目录"""
-        # 使用时间戳和UUID生成唯一目录名
+
+    def create_temp_dir(self, base_dir=None) -> str:
+        """创建临时目录，支持指定基础目录"""
+        if base_dir is None:
+            base_dir = self.base_dir
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         unique_id = str(uuid.uuid4())[:8]
         dir_name = f"{timestamp}_{unique_id}"
-        
-        # 创建目录
-        temp_dir = os.path.join(self.base_dir, dir_name)
+        temp_dir = os.path.join(base_dir, dir_name)
         os.makedirs(temp_dir, exist_ok=True)
-        
         self.temp_dirs.append(temp_dir)
         logger.debug(f"创建解压目录: {temp_dir}")
         return temp_dir
