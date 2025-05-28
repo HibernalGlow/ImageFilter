@@ -1,15 +1,6 @@
 """
 多进程哈希计算优化使用示例
 """
-import time
-from concurrent.futures import ProcessPoolExecutor, as_completed
-from pathlib import Path
-from typing import List
-
-# 导入优化工具
-from hashu.utils.hash_process_config import setup_multiprocess_hash_environment
-from hashu.core.calculate_hash_custom import ImageHashCalculator, HashCache
-
 from loguru import logger
 import os
 import sys
@@ -74,7 +65,18 @@ def setup_logger(app_name="app", project_root=None, console_output=True):
     logger.info(f"日志系统已初始化，应用名称: {app_name}")
     return logger, config_info
 
-logger, config_info = setup_logger(app_name="hashu", console_output=True)
+logger, config_info = setup_logger(app_name="hashu", console_output=False)
+
+import time
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from pathlib import Path
+from typing import List
+
+# 导入优化工具
+from hashu.utils.hash_process_config import setup_multiprocess_hash_environment
+from hashu.core.calculate_hash_custom import ImageHashCalculator, HashCache
+
+
 
 def calculate_hash_worker(image_path: str) -> dict:
     """工作进程函数：计算单个图片的哈希值
