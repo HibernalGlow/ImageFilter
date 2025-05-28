@@ -1,4 +1,3 @@
-
 # 配置日志
 from loguru import logger
 import os
@@ -300,6 +299,8 @@ class FilterConfig:
                         help='最大工作线程数')
         parser.add_argument('--clipboard', '-c', action='store_true',
                         help='从剪贴板读取路径')
+        parser.add_argument('--path', '-p', action='append', 
+                        help='指定输入路径，可多次使用此参数以指定多个路径')
         parser.add_argument('paths', nargs='*', help='输入路径')
         return parser
     
@@ -335,7 +336,7 @@ class FilterConfig:
                 "description": "仅去除小尺寸图片",
                 "checkbox_options": ["enable_small_filter", "clipboard"],
                 "input_values": {
-                    "min_size": str(DEFAULT_MIN_SIZE) 
+                    "min_size": str(DEFAULT_MIN_SIZE),
                 }
             },
             "去重复": {
@@ -343,7 +344,7 @@ class FilterConfig:
                 "checkbox_options": ["enable_duplicate_filter", "clipboard"],
                 "input_values": {
                     "ref_hamming_threshold": str(DEFAULT_HAMMING_DISTANCE),
-                    "duplicate_filter_mode": "quality"
+                    "duplicate_filter_mode": "quality",
                 }
             },
             "去水印图": {
@@ -357,6 +358,8 @@ class FilterConfig:
             "去黑白": {
                 "description": "仅去除黑白/白图",
                 "checkbox_options": ["enable_grayscale_filter", "clipboard"],
+                "input_values": {
+                }
             },
             "哈希比对": {
                 "description": "使用哈希文件比对去重",
@@ -364,7 +367,7 @@ class FilterConfig:
                 "input_values": {
                     "duplicate_filter_mode": "hash",
                     "hash_file": "",
-                    "ref_hamming_threshold": str(DEFAULT_HAMMING_DISTANCE)
+                    "ref_hamming_threshold": str(DEFAULT_HAMMING_DISTANCE),
                 }
             },
             "合并": {
@@ -372,7 +375,7 @@ class FilterConfig:
                 "checkbox_options": ["merge_archives", "enable_duplicate_filter","clipboard"],
                 "input_values": {
                     "duplicate_filter_mode": "quality",
-                    "ref_hamming_threshold": str(1)
+                    "ref_hamming_threshold": str(1),
                 }
             },
             "完整过滤": {
@@ -566,9 +569,16 @@ class Application:
             bool: 处理是否成功
         """
 
-        # 获取输入路径
+        # 获取输入路径 (合并 paths 和 path 参数)
+        cli_paths = args.paths
+        if hasattr(args, 'path') and args.path:
+            if cli_paths:
+                cli_paths.extend(args.path)
+            else:
+                cli_paths = args.path
+            
         paths = InputHandler.get_input_paths(
-            cli_paths=args.paths,
+            cli_paths=cli_paths,
             use_clipboard=args.clipboard,
             allow_manual=True
         )
@@ -621,8 +631,16 @@ class Application:
             # 添加输入框的值
             for arg, value in params['inputs'].items():
                 if value.strip():
-                    sys.argv.append(arg)
-                    sys.argv.append(value)
+                    # 特殊处理 --path 参数，允许多个路径（用逗号分隔）
+                    if arg == '--path':
+                        for path in value.split(','):
+                            path = path.strip()
+                            if path:
+                                sys.argv.append(arg)
+                                sys.argv.append(path)
+                    else:
+                        sys.argv.append(arg)
+                        sys.argv.append(value)
             
             # 使用全局的 parser 解析参数
             args = parser.parse_args()
