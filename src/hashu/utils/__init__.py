@@ -1,12 +1,9 @@
 """
-哈希计算模块
+哈希计算工具包
 """
-# 导出主要功能
+# 导出主要工具函数
 from hashu.utils.hash_export import (
     calculate_hash_for_artist_folder,
     process_duplicates_with_hash_file,
     get_hash_file_path
-)
-
-# 版本信息
-__version__ = "1.0.0"
+) 

@@ -144,7 +144,7 @@ def get_multiprocess_hash_config():
 # 常量配置 - 添加默认值处理
 SCRIPTS_DIR = Path(os.getenv("SCRIPTS_DIR", "."))  # 默认为当前目录
 PROJECT_ROOT = Path(os.getenv("PROJECT_ROOT", "."))  # 默认为当前目录
-HASH_FILES_LIST = os.path.expanduser(r"E:\1EHV\hash_files_list.txt")
+HASH_FILES_LIST = os.path.expanduser(r"E:\999EHV\hash_files_list.txt")
 
 # 检查关键路径是否存在，如果不存在则使用相对路径
 if SCRIPTS_DIR.exists():
@@ -256,12 +256,12 @@ def process_duplicates(hash_file: str, target_paths: list[str], params: dict = N
     """
     try:
         # 构建命令 - 使用batch_img_filter.py替代直接调用img_filter.py
-        cmd = f'"{PYTHON_EXECUTABLE}" "{DEDUP_SCRIPT}"'
+        cmd = f' "{DEDUP_SCRIPT}"'
         cmd += f' --hash_file "{hash_file}"'
         cmd += f' --max_workers {worker_count}'
         cmd += ' --enable_duplicate_filter'
         cmd += ' --duplicate_filter_mode hash'
-        
+        # 示例 batchfilter -hash_file "E:\BaiduNetdiskDownload\备份\[カチワリ実験室 (しノ)]\image_hashes.json" -max_workers 16 --enable_duplicate_filter --duplicate_filter_mode hash
         # 添加参数
         if params:
             if params.get('exclude-paths'):

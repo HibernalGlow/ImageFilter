@@ -41,30 +41,49 @@ class URIParser:
                 else:
                     result['uri_without_format'] = uri
                     
-            elif uri.startswith('archive:///'):
-                # 压缩包文件处理
-                archive_part = unquote(uri[11:])  # 去掉archive:///前缀
-                if '!' in archive_part:
+            elif uri.startswith('archive://'):
+                # 压缩包文件处理 - 支持两种格式
+                # 确定前缀长度 (archive:// 或 archive:///)
+                prefix_length = 10  # 默认为 archive://
+                if uri.startswith('archive:///'):
+                    prefix_length = 11  # archive:///
+                
+                archive_part = unquote(uri[prefix_length:])  # 去掉前缀
+                
+                # 处理分隔符 (! 或 !/)
+                if '!/' in archive_part:
+                    archive_path, internal_path = archive_part.split('!/', 1)
+                elif '!' in archive_part:
                     archive_path, internal_path = archive_part.split('!', 1)
+                    # 如果internal_path不以/开头，添加一个/以保持一致性
+                    if internal_path and not internal_path.startswith('/'):
+                        internal_path = '/' + internal_path
+                else:
+                    # 没有内部路径的情况
+                    archive_path = archive_part
+                    internal_path = ''
+                
+                # 压缩包名
+                result['archive_name'] = Path(archive_path).name
+                
+                # 内部文件信息
+                if internal_path:
+                    internal_obj = Path(internal_path)
+                    result['filename'] = internal_obj.name
+                    result['file_format'] = internal_obj.suffix.lower().lstrip('.')
                     
-                    # 压缩包名
-                    result['archive_name'] = Path(archive_path).name
-                    
-                    # 内部文件信息
-                    if internal_path:
-                        internal_obj = Path(internal_path)
-                        result['filename'] = internal_obj.name
-                        result['file_format'] = internal_obj.suffix.lower().lstrip('.')
-                        
-                        # 去掉格式的URL：移除内部文件扩展名
-                        if result['file_format']:
-                            base_internal = str(internal_obj.with_suffix(''))
-                            result['uri_without_format'] = f"archive:///{archive_path}!{base_internal}"
-                        else:
-                            result['uri_without_format'] = uri
+                    # 去掉格式的URL：移除内部文件扩展名
+                    if result['file_format']:
+                        base_internal = str(internal_obj.with_suffix(''))
+                        # 使用与输入URI相同的格式
+                        prefix = uri[:prefix_length]
+                        separator = '!/' if '!/' in uri else '!'
+                        result['uri_without_format'] = f"{prefix}{archive_path}{separator}{base_internal}"
                     else:
                         result['uri_without_format'] = uri
-                        
+                else:
+                    result['uri_without_format'] = uri
+                    
             return result
             
         except Exception as e:
@@ -116,6 +135,8 @@ class PathURIGenerator:
         1. 普通压缩包: E:/data.zip!folder/image.jpg → archive:///E:/data.zip!folder/image.jpg
         2. 合并压缩包: E:/path/merged_1742363623326.zip!PIXIV FANBOX/2022-08-10/1.avif 
         → archive:///E:/path/PIXIV FANBOX.zip!/2022-08-10/1.avif
+        
+        注意: 使用统一的格式 archive:///path!internal_path
         """
         # 检查是否为合并压缩包格式 (merged_开头的zip)
         base_name = os.path.basename(archive_path)
@@ -131,13 +152,15 @@ class PathURIGenerator:
             new_archive_path = os.path.join(base_dir, f"{first_level_dir}.zip")
             resolved_path = str(Path(new_archive_path).resolve()).replace('\\', '/')
             
-            # 返回新的URI
+            # 返回新的URI (使用统一格式 archive:///path!internal_path)
             return f"archive:///{resolved_path}!{remaining_path}"
         
         # 普通压缩包处理
         resolved_path = str(Path(archive_path).resolve()).replace('\\', '/')
         # 仅替换反斜杠为正斜杠，不做任何编码
         normalized_internal = internal_path.replace('\\', '/')
+        
+        # 使用统一的格式 archive:///path!internal_path (无斜杠分隔)
         return f"archive:///{resolved_path}!{normalized_internal}"
     @staticmethod
     def back_to_original_path(uri: str) -> Tuple[str, Optional[str]]:
@@ -156,14 +179,26 @@ class PathURIGenerator:
                 file_path = decoded_uri[8:]  # 去掉file:///前缀
                 return Path(file_path).resolve().as_posix(), None
                 
-            elif uri.startswith('archive:///'):
-                # 压缩包路径处理
-                archive_part = decoded_uri[11:]  # 去掉archive:///前缀
+            elif uri.startswith('archive://'):
+                # 压缩包路径处理 - 支持两种格式
+                # 确定前缀长度 (archive:// 或 archive:///)
+                prefix_length = 10  # 默认为 archive://
+                if uri.startswith('archive:///'):
+                    prefix_length = 11  # archive:///
+                
+                archive_part = decoded_uri[prefix_length:]  # 去掉前缀
+                
                 if '!' not in archive_part:
                     raise ValueError("无效的压缩包URI格式")
                 
+                # 处理分隔符 (! 或 !/)
+                if '!/' in archive_part:
+                    archive_path, internal_path = archive_part.split('!/', 1)
+                else:
+                    archive_path, internal_path = archive_part.split('!', 1)
+                
                 # 直接保留原始结构
-                full_path = archive_part.replace('!', os.sep)  # 将!转换为系统路径分隔符
+                full_path = f"{archive_path}{os.sep}{internal_path}"  # 将!转换为系统路径分隔符
                 normalized_path = os.path.normpath(full_path)
                 return (normalized_path, )
 

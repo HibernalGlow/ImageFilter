@@ -9,9 +9,12 @@ from typing import Optional, List
 from datetime import datetime
 # 添加TextualLogger导入
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from textual_logger import TextualLoggerManager
-from hashu.utils.hash_process_config import get_latest_hash_file_path, process_artist_folder, process_duplicates
+# 导入需要的函数
+from hashu import calculate_hash_for_artist_folder, get_hash_file_path
+# 从batchfilter导入重复检测函数
+from batchfilter import process_duplicates_with_hash_file
 from loguru import logger
 import os
 import sys
@@ -111,7 +114,7 @@ TEXTUAL_LAYOUT = {
 }
 
 # 常量设置
-WORKER_COUNT = 2  # 线程数
+WORKER_COUNT = 16  # 线程数
 FORCE_UPDATE = False  # 是否强制更新哈希值
 
 def init_TextualLogger():
@@ -263,7 +266,7 @@ def process_single_path(path: Path, workers: int = 4, force_update: bool = False
         logger.info(f"[#update_log]✅ 使用画师文件夹: {artist_folder}")
         
         # 处理画师文件夹，生成哈希文件
-        hash_file = process_artist_folder(artist_folder, workers, force_update)
+        hash_file = calculate_hash_for_artist_folder(artist_folder, workers, force_update)
         if not hash_file:
             return False
             
@@ -271,10 +274,15 @@ def process_single_path(path: Path, workers: int = 4, force_update: bool = False
         
         # 处理重复文件
         logger.info(f"[#process_log]\n🔄 处理重复文件 {path}")
-        process_duplicates(hash_file, [str(path)], params, workers)
+        result = process_duplicates_with_hash_file(hash_file, [str(path)], params, workers)
         
-        logger.info(f"[#update_log]✅ 处理完成: {path}")
-        return True
+        if result.get("success", False):
+            logger.info(f"[#update_log]✅ 处理完成: {path}")
+            logger.info(f"[#update_log]总图片数: {result.get('total', 0)}, 发现重复: {result.get('duplicates', 0)}")
+            return True
+        else:
+            logger.info(f"[#process_log]❌ 处理失败: {result.get('error', '未知错误')}")
+            return False
         
     except Exception as e:
         logger.info(f"[#process_log]❌ 处理路径时出错: {path}: {e}")
@@ -424,15 +432,19 @@ def main():
         logger.info(f"[#current_stats]总路径数: {total_count} 已处理: {i-1} 成功: {success_count} 总进度: [{('=' * int(progress/5))}] {progress}%")
         
         # 处理画师文件夹，生成哈希文件
-        hash_file = process_artist_folder(artist_folder, WORKER_COUNT, FORCE_UPDATE)
+        hash_file = calculate_hash_for_artist_folder(artist_folder, WORKER_COUNT, FORCE_UPDATE)
         if not hash_file:
             # 更新失败状态
             logger.info(f"[#current_stats]总路径数: {total_count} 已处理: {i} 成功: {success_count} 总进度: [{('=' * int(progress/5))}] {progress}%")
             continue
             
         # 处理重复文件
-        process_duplicates(hash_file, [str(path)], params, WORKER_COUNT)
-        success_count += 1
+        result = process_duplicates_with_hash_file(hash_file, [str(path)], params, WORKER_COUNT)
+        if result.get("success", False):
+            success_count += 1
+            logger.info(f"[#update_log]总图片数: {result.get('total', 0)}, 发现重复: {result.get('duplicates', 0)}")
+        else:
+            logger.info(f"[#process_log]❌ 处理失败: {result.get('error', '未知错误')}")
         
         # 更新最终进度
         progress = int(i / total_count * 100)
