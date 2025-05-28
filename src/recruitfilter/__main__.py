@@ -17,7 +17,7 @@ from imgfilter.utils.path import PathHandler, ExtractMode
 import platform
 import stat
 import threading
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from queue import Queue
 import multiprocessing
 import zipfile
@@ -546,7 +546,7 @@ def run_application(args):
         logger.info(f"[@global_progress]总任务进度 (0/{total_count}) 0%")
         
         # 使用线程池并行处理压缩包
-        with ProcessPoolExecutor(max_workers=args.workers) as executor:
+        with ThreadPoolExecutor(max_workers=args.workers) as executor:
             # 创建任务列表
             future_to_archive = {
                 executor.submit(
@@ -745,7 +745,7 @@ def run_with_args(params):
         logger.info(f"[@global_progress]总任务进度 (0/{total_count}) 0%")
         
         # 使用线程池并行处理压缩包
-        with ProcessPoolExecutor(max_workers=args.workers) as executor:
+        with ThreadPoolExecutor(max_workers=args.workers) as executor:
             # 创建任务列表
             future_to_archive = {
                 executor.submit(

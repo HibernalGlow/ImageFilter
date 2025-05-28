@@ -148,8 +148,8 @@ HASH_FILES_LIST = os.path.expanduser(r"E:\1EHV\hash_files_list.txt")
 
 # 检查关键路径是否存在，如果不存在则使用相对路径
 if SCRIPTS_DIR.exists():
-    HASH_SCRIPT = SCRIPTS_DIR / "comic" / "hash_prepare.py"
-    DEDUP_SCRIPT = SCRIPTS_DIR / "fliter" / "batch_img_filter.py"
+    HASH_SCRIPT = "hashpre"
+    DEDUP_SCRIPT = "batchfilter"
 else:
     # 使用相对于当前项目的路径
     HASH_SCRIPT = None
@@ -204,7 +204,7 @@ def process_artist_folder(folder_path: Path, workers: int = 4, force_update: boo
     """
     try:
         # 构建命令
-        cmd = f'"{PYTHON_EXECUTABLE}" "{HASH_SCRIPT}" --workers {workers} --path "{str(folder_path)}"'
+        cmd = f' "{HASH_SCRIPT}" --workers {workers} --path "{str(folder_path)}"'
         if force_update:
             cmd += " --force"
             

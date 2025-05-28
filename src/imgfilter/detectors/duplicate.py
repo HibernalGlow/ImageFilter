@@ -128,6 +128,7 @@ def _get_image_hash_static(image_path: str, internal_path: str = None, zip_path:
             return None
 
         # 查询全局缓存
+        from hashu.core.calculate_hash_custom import ImageHashCalculator
         cached_hash = ImageHashCalculator.get_hash_from_url(uri)
         if cached_hash:
             logger.info(f"[#hash_calc]使用缓存的哈希值: {uri}")
@@ -505,6 +506,7 @@ class DuplicateImageDetector:
                 return None
 
             # 查询全局缓存
+            from hashu.core.calculate_hash_custom import ImageHashCalculator
             cached_hash = ImageHashCalculator.get_hash_from_url(uri)
             if cached_hash:
                 logger.info(f"[#hash_calc]使用缓存的哈希值: {uri}")

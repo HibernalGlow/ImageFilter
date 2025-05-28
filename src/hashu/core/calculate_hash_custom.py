@@ -635,7 +635,7 @@ class ImageHashCalculator:
                 if use_preload:
                     cached_hash = HashCache.get_hash(url, use_preload=True)
                 else:
-                    cached_hash = HashCache.get_hash_from_url(url)
+                    cached_hash = HashCache.get_hash(url)
                     
                 if cached_hash:
                     # 判断哈希来源的存储后端

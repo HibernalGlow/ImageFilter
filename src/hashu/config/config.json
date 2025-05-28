@@ -1,13 +1,13 @@
 {
   "sqlite_databases": [
-    "E:/1EHV/hashu_database.db"
+    "E:/999EHV/hashu_database.db"
   ],
   "json_hash_files": [
-    "E:/1EHV/image_hashes_collection.json",
-    "E:/1EHV/image_hashes_global.json"
+    "E:/999EHV/image_hashes_collection.json",
+    "E:/999EHV/image_hashes_global.json"
   ],
   "config_files": {
-    "hash_files_list": "E:/1EHV/hash_files_list.txt",
+    "hash_files_list": "E:/999EHV/hash_files_list.txt",
     "cache_timeout": 1800,
     "auto_backup_interval": 3600
   },
@@ -27,11 +27,11 @@
     "enable_backup": true,
     "backup_interval_hours": 24,
     "max_backup_files": 5,
-    "backup_directory": "E:/1EHV/backups"
+    "backup_directory": "E:/999EHV/backups"
   },
   "migration_config": {
     "auto_migrate_json_to_sqlite": true,
     "preserve_json_files": true,
-    "migration_log_file": "E:/1EHV/migration.log"
+    "migration_log_file": "E:/999EHV/migration.log"
   }
 }
