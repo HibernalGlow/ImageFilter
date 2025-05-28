@@ -8,9 +8,9 @@ wheels/
 
 # Virtual environments
 .venv
-/src/badzipfliter/archive_check_history.json
-/src/badzipfliter/logs
+/src/badzipfilter/archive_check_history.json
+/src/badzipfilter/logs
 *.log
-/src/badzfliter/archive_check_history.json
+/src/badzfilter/archive_check_history.json
 /src/imgu/imgutils-main
 /src/imgfilter/detectors/text_image_cache.json

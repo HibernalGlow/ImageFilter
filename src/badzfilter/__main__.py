@@ -35,11 +35,11 @@ def run_check(paths=None, use_clipboard=False, no_tui=False, force_check=False):
     # 根据是否使用TUI配置日志
     if no_tui or not TEXTUAL_AVAILABLE:
         # 重新初始化日志，启用控制台输出
-        logger, config_info = setup_logger(app_name="badzipfliter", console_output=True)
+        logger, config_info = setup_logger(app_name="badzipfilter", console_output=True)
         logger.info("使用控制台输出模式")
     else:
         # 初始化日志，不使用控制台输出（将由TUI接管）
-        logger, config_info = setup_logger(app_name="badzipfliter", console_output=False)
+        logger, config_info = setup_logger(app_name="badzipfilter", console_output=False)
         # 初始化TextualLogger
         TextualLoggerManager.set_layout(TEXTUAL_LAYOUT, config_info['log_file'], newtab=True)
         logger.info("使用TUI界面模式")

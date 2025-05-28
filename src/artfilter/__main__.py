@@ -1,20 +1,3 @@
-import os
-import sys
-import json
-import hashlib
-import argparse
-import subprocess
-from pathlib import Path
-from typing import Optional, List
-from datetime import datetime
-# 添加TextualLogger导入
-
-
-from textual_logger import TextualLoggerManager
-# 导入需要的函数
-from hashu import calculate_hash_for_artist_folder, get_hash_file_path
-# 从batchfilter导入重复检测函数
-from batchfilter import process_duplicates_with_hash_file
 from loguru import logger
 import os
 import sys
@@ -79,8 +62,26 @@ def setup_logger(app_name="app", project_root=None, console_output=True):
     logger.info(f"日志系统已初始化，应用名称: {app_name}")
     return logger, config_info
 
-logger, config_info = setup_logger(app_name="artbook_dedup", console_output=True)
+logger, config_info = setup_logger(app_name="artbook_dedup", console_output=False)
 
+
+import json
+import hashlib
+import argparse
+import subprocess
+from pathlib import Path
+from typing import Optional, List
+from datetime import datetime
+# 添加TextualLogger导入
+
+
+from textual_logger import TextualLoggerManager
+# 直接从hashu包导入需要的函数
+from hashu import (
+    calculate_hash_for_artist_folder,
+    process_duplicates_with_hash_file,
+    get_hash_file_path
+)
 
 # 参数配置
 DEFAULT_PARAMS = {
@@ -274,15 +275,10 @@ def process_single_path(path: Path, workers: int = 4, force_update: bool = False
         
         # 处理重复文件
         logger.info(f"[#process_log]\n🔄 处理重复文件 {path}")
-        result = process_duplicates_with_hash_file(hash_file, [str(path)], params, workers)
+        process_duplicates_with_hash_file(hash_file, [str(path)], params, workers)
         
-        if result.get("success", False):
-            logger.info(f"[#update_log]✅ 处理完成: {path}")
-            logger.info(f"[#update_log]总图片数: {result.get('total', 0)}, 发现重复: {result.get('duplicates', 0)}")
-            return True
-        else:
-            logger.info(f"[#process_log]❌ 处理失败: {result.get('error', '未知错误')}")
-            return False
+        logger.info(f"[#update_log]✅ 处理完成: {path}")
+        return True
         
     except Exception as e:
         logger.info(f"[#process_log]❌ 处理路径时出错: {path}: {e}")
@@ -439,12 +435,8 @@ def main():
             continue
             
         # 处理重复文件
-        result = process_duplicates_with_hash_file(hash_file, [str(path)], params, WORKER_COUNT)
-        if result.get("success", False):
-            success_count += 1
-            logger.info(f"[#update_log]总图片数: {result.get('total', 0)}, 发现重复: {result.get('duplicates', 0)}")
-        else:
-            logger.info(f"[#process_log]❌ 处理失败: {result.get('error', '未知错误')}")
+        process_duplicates_with_hash_file(hash_file, [str(path)], params, WORKER_COUNT)
+        success_count += 1
         
         # 更新最终进度
         progress = int(i / total_count * 100)

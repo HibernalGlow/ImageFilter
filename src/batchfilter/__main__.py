@@ -1,19 +1,4 @@
-import os
-import sys
-import argparse
-from pathlib import Path
-from typing import Dict, Any, List, Set, Tuple, Optional
-from imgfilter.utils.archive import ArchiveHandler,SUPPORTED_ARCHIVE_FORMATS
-from imgfilter.utils.input import InputHandler
-from textual_preset import create_config_app
-from batchfilter.utils.merge import ArchiveMerger
-from textual_logger import TextualLoggerManager
-import shutil
-import time
-import subprocess
-from pathlib import Path
-from typing import List, Tuple, Optional
-from send2trash import send2trash
+
 # 配置日志
 from loguru import logger
 import os
@@ -80,7 +65,22 @@ def setup_logger(app_name="app", project_root=None, console_output=True):
     return logger, config_info
 
 logger, config_info = setup_logger(app_name="batch_img_filter", console_output=False)
-
+import os
+import sys
+import argparse
+from pathlib import Path
+from typing import Dict, Any, List, Set, Tuple, Optional
+from imgfilter.utils.archive import ArchiveHandler,SUPPORTED_ARCHIVE_FORMATS
+from imgfilter.utils.input import InputHandler
+from textual_preset import create_config_app
+from batchfilter.utils.merge import ArchiveMerger
+from textual_logger import TextualLoggerManager
+import shutil
+import time
+import subprocess
+from pathlib import Path
+from typing import List, Tuple, Optional
+from send2trash import send2trash
 
 # TextualLogger布局配置
 TEXTUAL_LAYOUT = {

@@ -97,7 +97,7 @@ def setup_logger(app_name="app", project_root=None, console_output=True):
     logger.info(f"日志系统已初始化，应用名称: {app_name}")
     return logger, config_info
 
-logger, config_info = setup_logger(app_name="hashpre", console_output=True)
+logger, config_info = setup_logger(app_name="hashpre", console_output=False)
 
 # 在全局配置部分添加以下内容
 # ================= 日志配置 =================

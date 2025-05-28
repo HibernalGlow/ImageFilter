@@ -1,1 +1,1 @@
-src/widthfliter/__init__.py
+src/widthfilter/__init__.py

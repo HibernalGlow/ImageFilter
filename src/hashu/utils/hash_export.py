@@ -23,7 +23,7 @@ def calculate_hash_for_artist_folder(
 ) -> Optional[str]:
     """计算画师文件夹的哈希值并返回哈希文件路径
     
-    这个函数是为外部模块（如artfliter）提供的便捷接口，
+    这个函数是为外部模块（如artfilter）提供的便捷接口，
     用于计算画师文件夹的哈希值并直接返回生成的哈希文件路径。
     
     Args:
@@ -176,7 +176,7 @@ def process_duplicates_with_hash_file(
 ) -> None:
     """使用哈希文件处理重复文件
     
-    这个函数是为外部模块（如artfliter）提供的便捷接口，
+    这个函数是为外部模块（如artfilter）提供的便捷接口，
     用于使用哈希文件处理重复文件。
     
     Args:
