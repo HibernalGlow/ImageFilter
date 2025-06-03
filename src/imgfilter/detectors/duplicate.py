@@ -535,7 +535,6 @@ class DuplicateImageDetector:
         except Exception as e:
             logger.error(f"[#hash_calc]获取图片哈希异常 {image_path}: {str(e)}")
             return None
-    
     def _load_hash_file(self) -> Dict:
         """加载哈希文件"""
         if not self.hash_file:

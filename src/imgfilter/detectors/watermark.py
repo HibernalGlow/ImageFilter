@@ -3,6 +3,8 @@ import sys
 import os
 import json
 from PIL import Image
+import pillow_avif
+import pillow_jxl 
 import numpy as np
 from typing import Tuple, List, Dict, Optional
 import logging

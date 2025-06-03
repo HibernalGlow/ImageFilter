@@ -7,7 +7,7 @@ from typing import List, Set, Dict, Tuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import multiprocessing
 from loguru import logger
-
+import json
 from imgfilter.detectors.watermark import WatermarkDetector
 from imgfilter.detectors.text import CVTextImageDetector
 from imgfilter.detectors.duplicate import DuplicateImageDetector
@@ -174,3 +174,17 @@ class ImageFilter:
         
         return to_delete, removal_reasons
 
+    def _load_hash_file(self) -> Dict:
+        """加载哈希文件"""
+        try:
+            if not os.path.exists(self.hash_file):
+                logger.error(f"哈希文件不存在: {self.hash_file}")
+                return {}
+                
+            with open(self.hash_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            logger.info(f"成功加载哈希文件: {self.hash_file}")
+            return data.get('hashes', {})
+        except Exception as e:
+            logger.error(f"加载哈希文件失败: {e}")
+            return {}

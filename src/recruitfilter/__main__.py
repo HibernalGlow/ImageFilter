@@ -75,7 +75,8 @@ import pyperclip
 from textual_preset import create_config_app, ConfigOption, CheckboxOption, InputOption, PresetConfig
 from imgfilter.utils.backup import BackupHandler
 from imgfilter.utils.archive_process import ArchiveHandler
-from imgfilter.scripts.image_filter_old import ImageFilter
+# from imgfilter.scripts.image_filter_old import ImageFilter
+from imgfilter.core.filter import ImageFilter
 from imgfilter.utils.input import InputHandler
 from imgfilter.utils.path import PathHandler, ExtractMode
 import platform
@@ -152,6 +153,7 @@ class RecruitCoverFilter:
         Returns:
             str: 哈希文件路径，失败返回None
         """
+        # from imgfilter.detectors.duplicate import _load_hash_file
         try:
             from hashu.utils.hash_process_config import process_artist_folder
             hash_file = process_artist_folder(recruit_folder, workers, force_update)
