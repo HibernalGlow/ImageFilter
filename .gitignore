@@ -17,3 +17,4 @@ wheels/
 ocr_cache.json
 text_image_cache.json
 
+src/badzfilter/archive_check_history.json

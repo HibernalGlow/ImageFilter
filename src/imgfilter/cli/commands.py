@@ -51,7 +51,7 @@ def setup_parser(parser):
     parser.add_argument('input', help='输入图片文件或目录')
     parser.add_argument('--hash-file', help='哈希文件路径')
     parser.add_argument('--hamming-threshold', type=int, default=12, help='汉明距离阈值')
-    parser.add_argument('--min-size', type=int, default=631, help='最小图片尺寸')
+    parser.add_argument('--min-size', type=int, default=630, help='最小图片尺寸')
     parser.add_argument('--text-threshold', type=float, default=0.5, help='文本图片阈值')
     parser.add_argument('--dup-mode', choices=['quality', 'watermark', 'hash'], default='quality', help='重复图片处理模式')
     

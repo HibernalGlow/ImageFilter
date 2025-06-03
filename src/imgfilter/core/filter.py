@@ -52,7 +52,7 @@ class ImageFilter:
         enable_grayscale_filter: bool = None,
         enable_duplicate_filter: bool = None,
         enable_text_filter: bool = None,
-        min_size: int = 631,
+        min_size: int = 630,
         duplicate_filter_mode: str = 'quality',  # 'quality', 'watermark' or 'hash'
         watermark_keywords: List[str] = None,  # 水印关键词列表
         ref_hamming_threshold: int = None,  # 哈希文件过滤的汉明距离阈值

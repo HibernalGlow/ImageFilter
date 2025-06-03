@@ -114,7 +114,7 @@ TEXTUAL_LAYOUT = {
 HAS_TUI = True
 
 # 常量定义
-DEFAULT_MIN_SIZE = 631
+DEFAULT_MIN_SIZE = 630
 DEFAULT_HAMMING_DISTANCE = 12
 
 def initialize_textual_logger():

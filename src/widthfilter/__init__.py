@@ -1,1 +1,1 @@
-src/widthfilter/__init__.py
+# widthfilter package
