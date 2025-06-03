@@ -1,30 +1,3 @@
-from pathlib import Path
-import sys
-import os
-import json
-import logging
-from typing import List, Dict, Set, Tuple
-import time
-import subprocess
-import argparse
-import pyperclip
-from textual_preset import create_config_app, ConfigOption, CheckboxOption, InputOption, PresetConfig
-from imgfilter.utils.backup import BackupHandler
-from imgfilter.utils.archive_process import ArchiveHandler
-from imgfilter.scripts.image_filter_old import ImageFilter
-from imgfilter.utils.input import InputHandler
-from imgfilter.utils.path import PathHandler, ExtractMode
-import platform
-import stat
-import threading
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from queue import Queue
-import multiprocessing
-import zipfile
-import shutil
-# 在文件开头添加常量
-SUPPORTED_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.avif', '.heic', '.heif', '.jxl'}
-
 from loguru import logger
 import os
 import sys
@@ -90,6 +63,32 @@ def setup_logger(app_name="app", project_root=None, console_output=True):
     return logger, config_info
 
 logger, config_info = setup_logger(app_name="recruit_cover_filter", console_output=False)
+from pathlib import Path
+import sys
+import os
+import json
+from typing import List, Dict, Set, Tuple
+import time
+import subprocess
+import argparse
+import pyperclip
+from textual_preset import create_config_app, ConfigOption, CheckboxOption, InputOption, PresetConfig
+from imgfilter.utils.backup import BackupHandler
+from imgfilter.utils.archive_process import ArchiveHandler
+from imgfilter.scripts.image_filter_old import ImageFilter
+from imgfilter.utils.input import InputHandler
+from imgfilter.utils.path import PathHandler, ExtractMode
+import platform
+import stat
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from queue import Queue
+import multiprocessing
+import zipfile
+import shutil
+# 在文件开头添加常量
+SUPPORTED_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.avif', '.heic', '.heif', '.jxl'}
+
 BACKUP_ENABLED = True
 DEBUG_MODE = False
 from textual_logger import TextualLoggerManager
@@ -139,7 +138,7 @@ class RecruitCoverFilter:
         self.watermark_keywords = watermark_keywords
         self.max_workers = max_workers or multiprocessing.cpu_count()
         # 初始化日志系统（只初始化一次）
-        initialize_textual_logger(TEXTUAL_LAYOUT, config_info['log_file'])
+        # initialize_textual_logger(TEXTUAL_LAYOUT, config_info['log_file'])
         
     def prepare_hash_file(self, recruit_folder: str, workers: int = 16, force_update: bool = False) -> str:
         """
@@ -514,7 +513,7 @@ def run_application(args):
 
         # 如果是去汉化模式且没有指定哈希文件，自动准备哈希文件
         if is_dehash_mode and not args.hash_file:
-            recruit_folder = r"E:\999EHV\[zzz去图]"
+            recruit_folder = r"E:/1BACKUP/ehv/config/[zzz去图]"
             hash_file = filter_instance.prepare_hash_file(recruit_folder)
             if not hash_file:
                 logger.error("[#sys_log]❌ 去汉化模式需要哈希文件，但准备失败")
@@ -713,7 +712,7 @@ def run_with_args(params):
 
         # 如果是去汉化模式且没有指定哈希文件，自动准备哈希文件
         if is_dehash_mode and not args.hash_file:
-            recruit_folder = r"E:\999EHV\[01杂]\[zzz去图]"
+            recruit_folder = r"E:/1BACKUP/ehv/config/[01杂]/[zzz去图]"
             hash_file = filter_instance.prepare_hash_file(recruit_folder)
             if not hash_file:
                 logger.error("[#sys_log]❌ 去汉化模式需要哈希文件，但准备失败")
@@ -808,8 +807,7 @@ def run_with_args(params):
         logger.error(f"[#sys_log]程序执行失败: {str(e)}\n{error_trace}")
         return False
 
-# 入口函数
-if __name__ == '__main__':
+def main():
     if len(sys.argv) > 1:
         # 命令行模式
         parser = setup_cli_parser()
@@ -839,3 +837,6 @@ if __name__ == '__main__':
         # TUI模式
         success = run_tui()
         sys.exit(0 if success else 1)
+        
+if __name__ == '__main__':
+    main()

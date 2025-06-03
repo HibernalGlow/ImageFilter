@@ -104,7 +104,7 @@ class TestHashExport(unittest.TestCase):
         print(f"失败处理: {hash_data.get('error_count')}")
         
         # 检查哈希列表文件是否已更新
-        hash_files_list_path = r"E:\999EHV\hash_files_list.txt"
+        hash_files_list_path = r"E:/1BACKUP/ehv/config/hash_files_list.txt"
         if os.path.exists(hash_files_list_path):
             with open(hash_files_list_path, 'r', encoding='utf-8') as f:
                 lines = f.readlines()

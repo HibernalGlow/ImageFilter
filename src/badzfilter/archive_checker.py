@@ -48,6 +48,30 @@ def get_archive_files(directory, archive_extensions=None):
             if any(filename.lower().endswith(ext) for ext in archive_extensions):
                 yield os.path.join(root, filename)
 
+def process_single_file(file_path, file_index, total_files):
+    """处理单个压缩包文件
+    
+    Args:
+        file_path (str): 压缩文件路径
+        file_index (int): 文件索引
+        total_files (int): 总文件数
+        
+    Returns:
+        dict: 包含处理结果的字典
+    """
+    logger.info(f"[#status] 🔍 正在检测: {file_path}")
+    is_valid = check_archive(file_path)
+    result = {
+        'path': file_path,
+        'valid': is_valid,
+        'time': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    }
+    # 更新进度
+    progress_percentage = int((file_index + 1) / total_files * 100)
+    logger.info(f"[@progress] 检测压缩包完整性 ({file_index + 1}/{total_files}) {progress_percentage}%")
+    return result
+
+
 def process_directory(directory, skip_checked=False, max_workers=4):
     """处理目录下的所有压缩包文件
     
@@ -84,30 +108,13 @@ def process_directory(directory, skip_checked=False, max_workers=4):
 
     if not files_to_process:
         logger.info("[#status] ✨ 没有需要处理的文件")
-        return
-
-    # 更新进度信息
+        return    # 更新进度信息
     total_files = len(files_to_process)
-    logger.info(f"[@progress] 检测压缩包完整性 (0/{total_files}) 0%")
-
-    # 定义单个文件处理函数
-    def process_single_file(file_path, file_index):
-        logger.info(f"[#status] 🔍 正在检测: {file_path}")
-        is_valid = check_archive(file_path)
-        result = {
-            'path': file_path,
-            'valid': is_valid,
-            'time': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        }
-        # 更新进度
-        progress_percentage = int((file_index + 1) / total_files * 100)
-        logger.info(f"[@progress] 检测压缩包完整性 ({file_index + 1}/{total_files}) {progress_percentage}%")
-        return result
 
     # 使用线程池处理文件
     with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
         # 使用enumerate获取索引，方便更新进度
-        futures = [executor.submit(process_single_file, file_path, i) for i, file_path in enumerate(files_to_process)]
+        futures = [executor.submit(process_single_file, file_path, i, total_files) for i, file_path in enumerate(files_to_process)]
         
         # 处理结果
         for future in concurrent.futures.as_completed(futures):

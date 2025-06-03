@@ -2,6 +2,7 @@
 SQLite数据库存储模块
 支持自定义archive://协议和向下兼容JSON格式
 """
+from hashu.log import logger
 
 import sqlite3
 import os
@@ -12,7 +13,6 @@ from typing import Dict, List, Optional, Tuple, Any
 from urllib.parse import urlparse, unquote
 from datetime import datetime
 import orjson
-from loguru import logger
 
 
 class HashDatabaseManager:

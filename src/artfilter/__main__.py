@@ -1,3 +1,15 @@
+
+
+
+import json
+import hashlib
+import argparse
+import subprocess
+from pathlib import Path
+from typing import Optional, List
+from datetime import datetime
+# 添加TextualLogger导入
+
 from loguru import logger
 import os
 import sys
@@ -63,25 +75,14 @@ def setup_logger(app_name="app", project_root=None, console_output=True):
     return logger, config_info
 
 logger, config_info = setup_logger(app_name="artbook_dedup", console_output=False)
-
-
-import json
-import hashlib
-import argparse
-import subprocess
-from pathlib import Path
-from typing import Optional, List
-from datetime import datetime
-# 添加TextualLogger导入
-
-
 from textual_logger import TextualLoggerManager
 # 直接从hashu包导入需要的函数
 from hashu import (
-    calculate_hash_for_artist_folder,
     process_duplicates_with_hash_file,
     get_hash_file_path
 )
+# 导入 hashprepare 方式的处理函数
+from hashu.utils.hash_process_config import process_artist_folder
 
 # 参数配置
 DEFAULT_PARAMS = {
@@ -267,7 +268,7 @@ def process_single_path(path: Path, workers: int = 4, force_update: bool = False
         logger.info(f"[#update_log]✅ 使用画师文件夹: {artist_folder}")
         
         # 处理画师文件夹，生成哈希文件
-        hash_file = calculate_hash_for_artist_folder(artist_folder, workers, force_update)
+        hash_file = process_artist_folder(artist_folder, workers, force_update)
         if not hash_file:
             return False
             
@@ -402,6 +403,7 @@ def main():
         print("[#process_log]❌ 未输入任何路径")
         return
         
+
     print("[#process_log]\n🚀 开始处理...")
     
     # 批量获取并确认画师文件夹
@@ -428,7 +430,7 @@ def main():
         logger.info(f"[#current_stats]总路径数: {total_count} 已处理: {i-1} 成功: {success_count} 总进度: [{('=' * int(progress/5))}] {progress}%")
         
         # 处理画师文件夹，生成哈希文件
-        hash_file = calculate_hash_for_artist_folder(artist_folder, WORKER_COUNT, FORCE_UPDATE)
+        hash_file = process_artist_folder(artist_folder, WORKER_COUNT, FORCE_UPDATE)
         if not hash_file:
             # 更新失败状态
             logger.info(f"[#current_stats]总路径数: {total_count} 已处理: {i} 成功: {success_count} 总进度: [{('=' * int(progress/5))}] {progress}%")

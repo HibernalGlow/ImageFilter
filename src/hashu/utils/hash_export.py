@@ -124,11 +124,11 @@ def calculate_hash_for_artist_folder(
             json.dump(output_data, f, ensure_ascii=False, indent=2)
             
         # 将哈希文件路径追加到列表文件
-        hash_files_list_path = r"E:\999EHV\hash_files_list.txt"
-        os.makedirs(os.path.dirname(hash_files_list_path), exist_ok=True)
+        # 将哈希文件路径追加到列表文件
+        hash_files_list_path = Path("E:/1BACKUP/ehv/config/hash_files_list.txt")
+        hash_files_list_path.parent.mkdir(parents=True, exist_ok=True)
         with open(hash_files_list_path, 'a', encoding='utf-8') as f:
             f.write(f"{str(hash_file_path)}\n")
-            
         logger.info(f"[#update_log]✅ 哈希文件已生成: {hash_file_path}")
         logger.info(f"[#update_log]总文件数: {len(image_files)}, 成功: {success_count}, 失败: {error_count}")
         

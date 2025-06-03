@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Optional
 from hashu.core.calculate_hash_custom import HashCache, ImageHashCalculator, get_db_cached
 from hashu.utils.path_uri import PathURIGenerator
-from loguru import logger
+from hashu.log import logger
 
 def get_or_create_archive_hash(archive_path: str) -> Optional[str]:
     """

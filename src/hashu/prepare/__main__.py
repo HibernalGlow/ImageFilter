@@ -122,8 +122,8 @@ warnings.filterwarnings("ignore", category=DecompressionBombWarning)
 # 设置PIL的日志级别为ERROR
 logging.getLogger("PIL").setLevel(logging.ERROR)
 # 全局配置
-GLOBAL_HASH_CACHE = os.path.expanduser(r"E:\999EHV\image_hashes_global.json")
-HASH_FILES_LIST = os.path.expanduser(r"E:\999EHV\hash_files_list.txt")  # 新增：保存所有哈希文件路径的文件
+GLOBAL_HASH_CACHE = os.path.expanduser(r"E:/1BACKUP/ehv/config/image_hashes_global.json")
+HASH_FILES_LIST = os.path.expanduser(r"E:/1BACKUP/ehv/config/hash_files_list.txt")  # 新增：保存所有哈希文件路径的文件
 
 # 退出码定义
 EXIT_SUCCESS = 0  # 成功完成

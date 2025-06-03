@@ -8,7 +8,7 @@ import pillow_avif
 import pillow_jxl
 import zipfile
 import io
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ThreadPoolExecutor
 import sys
 import warnings
 import subprocess
@@ -126,8 +126,8 @@ class ImageProcessor:
         # 将所有排除路径转换为小写，并确保是独立的词
         self.exclude_paths = [path.lower().strip() for path in self.exclude_paths]
         # 添加需要排除的文件格式
-        # self.exclude_formats = { '.gif', '.mp4', '.webm', '.mkv', '.mov'}
-        self.exclude_formats = {'.avif', '.jxl', '.gif', '.mp4', '.webm', '.mkv', '.mov'}
+        self.exclude_formats = { '.gif', '.mp4', '.webm', '.mkv', '.mov'}
+        # self.exclude_formats = {'.jxl', '.gif', '.mp4', '.webm', '.mkv', '.mov'}
         # 添加7z路径
         self.seven_zip_path = r"C:\Program Files\7-Zip\7z.exe"
         init_TextualLogger()
@@ -389,7 +389,7 @@ class ImageProcessor:
         moved_count = 0
         total_files = len(zip_files)
 
-        with ProcessPoolExecutor(max_workers=self.max_workers) as executor:
+        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
             for zip_path, should_process in tqdm(
                 executor.map(self.process_single_zip, zip_files),
                 total=total_files,

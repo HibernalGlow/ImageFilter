@@ -2,6 +2,7 @@
 图片哈希计算模块
 提供多种图片哈希计算方法和相似度比较功能
 """
+from hashu.log import logger
 
 from PIL import Image
 import pillow_avif
@@ -25,7 +26,6 @@ from functools import lru_cache
 import time
 from hashu.utils.path_uri import PathURIGenerator 
 from hashu.utils.image_clarity import ImageClarityEvaluator
-from loguru import logger
 # 导出这些类，使其保持向后兼容
 __all__ = [
     'PathURIGenerator',

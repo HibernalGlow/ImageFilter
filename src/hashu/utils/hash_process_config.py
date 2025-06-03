@@ -144,7 +144,7 @@ def get_multiprocess_hash_config():
 # 常量配置 - 添加默认值处理
 SCRIPTS_DIR = Path(os.getenv("SCRIPTS_DIR", "."))  # 默认为当前目录
 PROJECT_ROOT = Path(os.getenv("PROJECT_ROOT", "."))  # 默认为当前目录
-HASH_FILES_LIST = os.path.expanduser(r"E:\999EHV\hash_files_list.txt")
+HASH_FILES_LIST = os.path.expanduser(r"E:/1BACKUP/ehv/config/hash_files_list.txt")
 
 # 检查关键路径是否存在，如果不存在则使用相对路径
 if SCRIPTS_DIR.exists():
