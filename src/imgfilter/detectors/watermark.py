@@ -16,12 +16,11 @@ from io import BytesIO
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 from hashu.core.calculate_hash_custom import PathURIGenerator
 
-logger = logging.getLogger(__name__)
-
+from loguru import logger
 class WatermarkDetector:
     """水印检测器类"""
     
-    def __init__(self, api_url: str = "http://127.0.0.1:1224/api/ocr", cache_file: str = None):
+    def __init__(self, api_url: str = "http://127.0.0.1:6789/api/ocr", cache_file: str = None):
         """
         初始化水印检测器
         

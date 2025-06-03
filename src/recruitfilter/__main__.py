@@ -1,3 +1,27 @@
+from pathlib import Path
+import sys
+import os
+import json
+from typing import List, Dict, Set, Tuple
+import time
+import subprocess
+import argparse
+import pyperclip
+from textual_preset import create_config_app, ConfigOption, CheckboxOption, InputOption, PresetConfig
+from imgfilter.utils.backup import BackupHandler
+from imgfilter.utils.archive_process import ArchiveHandler
+# from imgfilter.scripts.image_filter_old import ImageFilter
+from imgfilter.core.filter import ImageFilter
+from imgfilter.utils.input import InputHandler
+from imgfilter.utils.path import PathHandler, ExtractMode
+import platform
+import stat
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from queue import Queue
+import multiprocessing
+import zipfile
+import shutil
 from loguru import logger
 import os
 import sys
@@ -63,30 +87,6 @@ def setup_logger(app_name="app", project_root=None, console_output=True):
     return logger, config_info
 
 logger, config_info = setup_logger(app_name="recruit_cover_filter", console_output=False)
-from pathlib import Path
-import sys
-import os
-import json
-from typing import List, Dict, Set, Tuple
-import time
-import subprocess
-import argparse
-import pyperclip
-from textual_preset import create_config_app, ConfigOption, CheckboxOption, InputOption, PresetConfig
-from imgfilter.utils.backup import BackupHandler
-from imgfilter.utils.archive_process import ArchiveHandler
-# from imgfilter.scripts.image_filter_old import ImageFilter
-from imgfilter.core.filter import ImageFilter
-from imgfilter.utils.input import InputHandler
-from imgfilter.utils.path import PathHandler, ExtractMode
-import platform
-import stat
-import threading
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from queue import Queue
-import multiprocessing
-import zipfile
-import shutil
 # 在文件开头添加常量
 SUPPORTED_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.avif', '.heic', '.heif', '.jxl'}
 
@@ -139,7 +139,7 @@ class RecruitCoverFilter:
         self.watermark_keywords = watermark_keywords
         self.max_workers = max_workers or multiprocessing.cpu_count()
         # 初始化日志系统（只初始化一次）
-        # initialize_textual_logger(TEXTUAL_LAYOUT, config_info['log_file'])
+        initialize_textual_logger(TEXTUAL_LAYOUT, config_info['log_file'])
         
     def prepare_hash_file(self, recruit_folder: str, workers: int = 16, force_update: bool = False) -> str:
         """

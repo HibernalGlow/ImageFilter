@@ -14,3 +14,6 @@ wheels/
 /src/badzfilter/archive_check_history.json
 /src/imgu/imgutils-main
 /src/imgfilter/detectors/text_image_cache.json
+ocr_cache.json
+text_image_cache.json
+

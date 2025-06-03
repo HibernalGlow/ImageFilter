@@ -1,5 +1,4 @@
 
-from hashu.log import logger
 import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
@@ -8,6 +7,7 @@ from typing import List
 # 导入优化工具
 from hashu.utils.hash_process_config import setup_multiprocess_hash_environment
 from hashu.core.calculate_hash_custom import ImageHashCalculator, HashCache
+from hashu.log import logger
 
 
 
