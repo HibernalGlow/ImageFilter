@@ -1,0 +1,24 @@
+{
+  "default_settings": {
+    "min_size": 630,
+    "width_range": [],
+    "height_range": []
+  },
+  "description": {
+    "min_size": "默认最小图片尺寸，当width_range和height_range都为空时使用",
+    "width_range": "宽度范围过滤 [min, max]，空列表表示不启用宽度检查",
+    "height_range": "高度范围过滤 [min, max]，空列表表示不启用高度检查"
+  },
+  "examples": {
+    "filter_by_height_only": {
+      "min_size": 630,
+      "width_range": [],
+      "height_range": [0, 630]
+    },
+    "filter_by_both_dimensions": {
+      "min_size": 630,
+      "width_range": [0, 800],
+      "height_range": [0, 600]
+    }
+  }
+}

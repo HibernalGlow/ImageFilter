@@ -1,4 +1,5 @@
 import os
+import json
 import logging
 from typing import List, Dict, Tuple, Set, Union
 from PIL import Image
@@ -9,14 +10,44 @@ from loguru import logger
 
 class SmallImageDetector:
     """小尺寸图片检测器"""
-    def __init__(self, min_size: int = 630):
+    def __init__(self, min_size: int = None, config_path: str = None):
         """
         初始化小图检测器
         
         Args:
-            min_size: 最小图片尺寸，默认只检查高度<630
+            min_size: 最小图片尺寸，如果提供则覆盖配置文件的默认值
+            config_path: 配置文件路径，默认使用内置配置
         """
-        self.min_size = min_size
+        # 加载配置
+        self._load_config(config_path)
+        
+        # 如果传入了min_size参数，则覆盖配置文件中的值
+        if min_size is not None:
+            self.min_size = min_size
+    
+    def _load_config(self, config_path: str = None):
+        """加载配置文件"""
+        if config_path is None:
+            # 使用默认配置文件路径
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            config_path = os.path.join(current_dir, 'small_detector_config.json')
+        
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+                default_settings = config.get('default_settings', {})
+                
+                self.min_size = default_settings.get('min_size', 630)
+                self.default_width_range = default_settings.get('width_range', [])
+                self.default_height_range = default_settings.get('height_range', [])
+                
+                logger.info(f"已加载小图检测器配置: min_size={self.min_size}, "
+                          f"width_range={self.default_width_range}, height_range={self.default_height_range}")
+        except Exception as e:
+            logger.warning(f"加载配置文件失败，使用默认配置: {e}")
+            self.min_size = 630
+            self.default_width_range = []
+            self.default_height_range = []
     def detect_small_images(self, image_files: List[str], min_size: int = None, **kwargs) -> Tuple[Set[str], Dict[str, Dict]]:
         """
         检测小尺寸图片
@@ -67,16 +98,16 @@ class SmallImageDetector:
             
         Returns:
             Tuple[bool, int, int, str]: (是否为小图, 宽度, 高度, 原因)
-        """
+        """        
         try:
-            # 获取精细控制参数
-            width_range = kwargs.get('width_range', [])
-            height_range = kwargs.get('height_range', [])
+            # 获取精细控制参数，如果没有提供则使用配置文件中的默认值
+            width_range = kwargs.get('width_range', self.default_width_range)
+            height_range = kwargs.get('height_range', self.default_height_range)
             
             with Image.open(img_path) as img:
                 width, height = img.size
                 
-                # 如果没有提供精细控制参数，使用默认逻辑
+                # 如果没有提供精细控制参数，使用默认逻辑（只检查高度=630）
                 if not width_range and not height_range:
                     # 使用传入的值或默认值
                     threshold = min_size if min_size is not None else self.min_size
