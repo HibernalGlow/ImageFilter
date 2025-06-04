@@ -10,12 +10,38 @@ import multiprocessing
 import mmap  # 添加 mmap 导入
 import tempfile
 import shutil
+import numpy as np
 
 from regex import F
 from hashu.core.calculate_hash_custom import ImageHashCalculator, PathURIGenerator
 from hashu.utils.hash_accelerator import HashAccelerator
 from concurrent.futures import ProcessPoolExecutor, as_completed  # 改为 ProcessPoolExecutor
 from loguru import logger
+os.environ["HF_DATASETS_OFFLINE"] = "1"  
+os.environ["TRANSFORMERS_OFFLINE"] = "1"
+os.environ['LPIPS_USE_GPU'] = '1'
+# 导入LPIPS距离计算函数
+from imgutils.metrics import lpips_difference
+
+def _calculate_lpips_worker(img_path1: str, img_path2: str) -> Tuple[Tuple[str, str], float]:
+    """
+    计算两张图片的LPIPS距离的工作函数
+    
+    Args:
+        img_path1: 第一张图片路径
+        img_path2: 第二张图片路径
+        
+    Returns:
+        Tuple[Tuple[str, str], float]: ((img_path1, img_path2), lpips_distance)
+    """
+    try:
+        # 使用imgutils.metrics中的lpips_difference函数
+        distance = lpips_difference(img_path1, img_path2)
+        return (img_path1, img_path2), distance
+    except Exception as e:
+        logger.error(f"[#hash_calc]计算LPIPS距离失败 {img_path1} vs {img_path2}: {e}")
+        return (img_path1, img_path2), float('inf')
+
 def _calculate_hash_worker(img_path: str, archive_path: str = None, temp_dir: str = None, 
                           image_archive_map: Dict[str, Union[str, Dict]] = None) -> Tuple[str, Optional[Tuple[str, str]]]:
     """
@@ -174,7 +200,8 @@ class DuplicateImageDetector:
     """重复图片检测器，支持多种检测策略"""
     
     def __init__(self, hash_file: str = None, hamming_threshold: int = 12, 
-                 ref_hamming_threshold: int = None, max_workers: int = None):
+                 ref_hamming_threshold: int = None, max_workers: int = None,
+                 lpips_threshold: float = 0.02):  # 添加LPIPS阈值参数
         """
         初始化重复图片检测器
         
@@ -183,6 +210,7 @@ class DuplicateImageDetector:
             hamming_threshold: 汉明距离阈值，用于相似图片组检测
             ref_hamming_threshold: 哈希文件过滤的汉明距离阈值，默认使用hamming_threshold
             max_workers: 最大工作进程数，默认为CPU核心数*2
+            lpips_threshold: LPIPS距离阈值，用于LPIPS模式下相似图片检测
         """
         self.hash_file = hash_file
         self.hamming_threshold = hamming_threshold
@@ -190,6 +218,7 @@ class DuplicateImageDetector:
         self.max_workers = max_workers or multiprocessing.cpu_count()*2
         self.hash_cache = {}
         self.mmap_cache = {}  # 添加mmap缓存
+        self.lpips_threshold = lpips_threshold  # 添加LPIPS阈值
         if hash_file:
             self.hash_cache = self._load_hash_file()    
     def _cleanup_mmap_cache(self):
@@ -221,7 +250,7 @@ class DuplicateImageDetector:
             archive_path: 原始压缩包路径
             temp_dir: 临时解压目录
             image_archive_map: 图片到压缩包内URI的映射
-            mode: 重复过滤模式 ('quality', 'watermark' 或 'hash')
+            mode: 重复过滤模式 ('quality', 'watermark', 'hash', 'lpips')
             watermark_keywords: 水印关键词列表，用于watermark模式
             ref_hamming_threshold: 哈希文件过滤的汉明距离阈值
             
@@ -255,14 +284,22 @@ class DuplicateImageDetector:
                 else:
                     logger.warning("[#hash_calc]Hash mode selected but no hash file provided")
             
-            # 其他模式: 先找出相似图片组，然后按不同策略处理
-            similar_groups = self._find_similar_images(image_files, archive_path, temp_dir, image_archive_map)
+            # LPIPS模式
+            if mode == 'lpips':
+                # 使用LPIPS方法查找相似图片组
+                similar_groups = self._find_similar_images_by_lpips(image_files)
+            else:
+                # 其他模式使用哈希方法查找相似图片组
+                similar_groups = self._find_similar_images(image_files, archive_path, temp_dir, image_archive_map)
             
             # 对每个相似组应用过滤策略
             for group in similar_groups:
                 if len(group) > 1:
                     if mode == 'watermark':
                         group_results, group_reasons = self._process_watermark_images(group, watermark_keywords)
+                    elif mode == 'lpips':
+                        # 使用quality过滤策略（基于文件大小）处理LPIPS相似组
+                        group_results, group_reasons = self._process_lpips_images(group)
                     else:  # 默认使用quality模式
                         group_results, group_reasons = self._process_quality_images(group)
                         
@@ -765,3 +802,101 @@ class DuplicateImageDetector:
         except Exception as e:
             logger.error(f"[#hash_calc]比较哈希值失败 {img_path}: {e}")
             return None
+
+    def _find_similar_images_by_lpips(self, images: List[str]) -> List[List[str]]:
+        """
+        使用LPIPS距离查找相似的图片组
+        
+        Args:
+            images: 图片文件列表
+            
+        Returns:
+            List[List[str]]: 相似图片组列表
+        """
+        similar_groups = []
+        processed = set()
+        
+        # 计算图片间的差异矩阵
+        n = len(images)
+        diff_matrix = np.zeros((n, n))
+        logger.info(f"[#hash_calc]开始计算 {n} 张图像的LPIPS距离")
+        
+        # 使用进程池计算LPIPS距离
+        with ProcessPoolExecutor(max_workers=self.max_workers) as executor:
+            # 创建任务列表
+            future_to_pair = {}
+            for i in range(n):
+                for j in range(i+1, n):
+                    future = executor.submit(
+                        _calculate_lpips_worker,
+                        images[i],
+                        images[j]
+                    )
+                    future_to_pair[future] = (i, j)
+            
+            # 收集结果
+            completed = 0
+            total_pairs = len(future_to_pair)
+            for future in as_completed(future_to_pair):
+                i, j = future_to_pair[future]
+                completed += 1
+                
+                try:
+                    (img1, img2), diff = future.result()
+                    diff_matrix[i, j] = diff
+                    diff_matrix[j, i] = diff
+                    
+                    # 每处理10%的图像对输出一次进度
+                    if completed % max(1, total_pairs // 10) == 0 or completed == total_pairs:
+                        progress = (completed / total_pairs) * 100
+                        logger.info(f"[#hash_calc]LPIPS计算进度: {completed}/{total_pairs} ({progress:.1f}%)")
+                    
+                    logger.info(f"[#hash_calc]LPIPS距离: {os.path.basename(images[i])} vs {os.path.basename(images[j])} = {diff:.4f}")
+                except Exception as e:
+                    logger.error(f"[#hash_calc]计算LPIPS距离失败 {images[i]} vs {images[j]}: {e}")
+                    diff_matrix[i, j] = float('inf')
+                    diff_matrix[j, i] = float('inf')
+        
+        # 构建相似性图
+        similarity_graph = {img: [] for img in images}
+        for i in range(n):
+            for j in range(i+1, n):
+                if diff_matrix[i, j] <= self.lpips_threshold:
+                    similarity_graph[images[i]].append(images[j])
+                    similarity_graph[images[j]].append(images[i])
+                    logger.info(f"找到相似图像: {os.path.basename(images[i])} 与 {os.path.basename(images[j])} (距离: {diff_matrix[i, j]:.4f})")
+        
+        # 使用DFS查找连通分量（相似组）
+        def dfs(node, component):
+            processed.add(node)
+            component.append(node)
+            for neighbor in similarity_graph[node]:
+                if neighbor not in processed:
+                    dfs(neighbor, component)
+        
+        # 查找所有连通分量
+        for img in images:
+            if img not in processed:
+                current_group = []
+                dfs(img, current_group)
+                if len(current_group) > 1:
+                    similar_groups.append(current_group)
+                    logger.info(f"找到相似图像组: {len(current_group)}张")
+        
+        return similar_groups
+        
+    def _process_lpips_images(self, group: List[str]) -> Tuple[Set[str], Dict[str, Dict]]:
+        """处理LPIPS相似图片组，采用与quality相同的策略（保留最大文件）"""
+        to_delete = set()
+        removal_reasons = {}
+        
+        deleted_files = self._apply_quality_filter(group)
+        for img, size_diff in deleted_files:
+            to_delete.add(img)
+            removal_reasons[img] = {
+                'reason': 'lpips_quality',  # 修改reason以区分
+                'size_diff': size_diff
+            }
+            logger.info(f"标记删除LPIPS相似图片: {os.path.basename(img)}")
+            
+        return to_delete, removal_reasons

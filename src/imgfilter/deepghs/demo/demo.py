@@ -1,5 +1,4 @@
-import matplotlib.pyplot as plt  
-from PIL import Image,ImageDraw  
+from PIL import Image, ImageDraw  
 import pillow_avif
 import pillow_jxl
 import numpy as np  
@@ -9,6 +8,7 @@ import sys
 # 设置环境变量以禁用SSL验证，解决证书问题
 os.environ['HF_HUB_DISABLE_SSL_VERIFICATION'] = '1'
 os.environ['CURL_CA_BUNDLE'] = ''
+
   
 # 导入单色图片检测功能  
 from imgutils.validate import get_monochrome_score, is_monochrome  
@@ -19,6 +19,7 @@ from imgutils.edge import get_edge_by_lineart, edge_image_with_lineart
 from imgutils.edge import get_edge_by_lineart_anime, edge_image_with_lineart_anime  
 from imgutils.edge import get_edge_by_canny, edge_image_with_canny  
 from imgutils.ocr import detect_text_with_ocr, ocr, list_det_models, list_rec_models  
+
 def demo_ocr_detection(image_path):  
     """演示OCR文本检测功能"""  
     print("\n=== OCR文本检测演示 ===")  
@@ -32,67 +33,40 @@ def demo_ocr_detection(image_path):
     # 2. 完整OCR（检测+识别）  
     ocr_results = ocr(image_path)  
       
-    # 显示结果  
-    plt.figure(figsize=(15, 10))  
-      
-    # 显示原始图像  
-    plt.subplot(2, 2, 1)  
-    plt.imshow(original_image)  
-    plt.title("原始图像")  
-    plt.axis('off')  
-      
-    # 显示文本区域检测结果  
-    plt.subplot(2, 2, 2)  
+    # 保存文本区域检测结果图像
     img_with_regions = original_image.copy()  
     draw = ImageDraw.Draw(img_with_regions)  
     for (x0, y0, x1, y1), _, score in text_regions:  
         draw.rectangle([(x0, y0), (x1, y1)], outline="red", width=2)  
-    plt.imshow(img_with_regions)  
-    plt.title(f"文本区域检测 (检测到{len(text_regions)}个区域)")  
-    plt.axis('off')  
+    img_with_regions.save("ocr_text_regions.png")
+    print(f"文本区域检测图像已保存为 ocr_text_regions.png (检测到{len(text_regions)}个区域)")
       
-    # 显示OCR识别结果  
-    plt.subplot(2, 2, 3)  
+    # 保存OCR识别结果图像
     img_with_ocr = original_image.copy()  
     draw = ImageDraw.Draw(img_with_ocr)  
     for (x0, y0, x1, y1), text, score in ocr_results:  
         draw.rectangle([(x0, y0), (x1, y1)], outline="blue", width=2)  
         draw.text((x0, y0-15), text, fill="blue")  
-    plt.imshow(img_with_ocr)  
-    plt.title(f"OCR文本识别 (识别到{len(ocr_results)}个文本)")  
-    plt.axis('off')  
+    img_with_ocr.save("ocr_text_recognition.png")
+    print(f"OCR文本识别图像已保存为 ocr_text_recognition.png (识别到{len(ocr_results)}个文本)")
       
-    # 显示可用模型信息  
-    plt.subplot(2, 2, 4)  
-    plt.axis('off')  
+    # 打印模型信息
     det_models = list_det_models()  
     rec_models = list_rec_models()  
-    info_text = f"检测模型: {len(det_models)}个\n"  
-    info_text += f"示例: {', '.join(det_models[:3])}...\n\n"  
-    info_text += f"识别模型: {len(rec_models)}个\n"  
-    info_text += f"示例: {', '.join(rec_models[:3])}...\n\n"  
-    info_text += "OCR结果:\n"  
-    for i, (_, text, score) in enumerate(ocr_results[:3]):  
-        info_text += f"{i+1}. '{text}' ({score:.2f})\n"  
-    if len(ocr_results) > 3:  
-        info_text += "..."  
-    plt.text(0.1, 0.1, info_text, fontsize=10)  
-    plt.title("OCR模型信息")  
-      
-    plt.tight_layout()  
-    plt.savefig("ocr_detection_demo.png")  
-    plt.show()  
-    print("OCR文本检测完成，结果已保存为 ocr_detection_demo.png")  
+    print(f"\n可用检测模型: {len(det_models)}个")  
+    print(f"示例: {', '.join(det_models[:3])}...")  
+    print(f"\n可用识别模型: {len(rec_models)}个")  
+    print(f"示例: {', '.join(rec_models[:3])}...")  
       
     # 打印详细OCR结果  
     print("\nOCR识别结果:")  
     for i, (bbox, text, score) in enumerate(ocr_results):  
-        print(f"{i+1}. 文本: '{text}', 置信度: {score:.4f}, 位置: {bbox}")  
+        print(f"{i+1}. 文本: '{text}', 置信度: {score:.4f}, 位置: {bbox}")
+    print("OCR文本检测完成")
 def demo_monochrome_detection(image_paths):  
     """演示单色图片检测功能"""  
     print("=== 单色图片检测演示 ===")  
       
-    plt.figure(figsize=(15, 10))  
     for i, img_path in enumerate(image_paths):  
         # 加载图像  
         image = Image.open(img_path)  
@@ -101,17 +75,20 @@ def demo_monochrome_detection(image_paths):
         mono_score = get_monochrome_score(img_path)  
         is_mono = is_monochrome(img_path)  
           
-        # 显示图像和结果  
-        plt.subplot(2, 3, i+1)  
-        plt.imshow(image)  
+        # 显示结果  
         result = "单色" if is_mono else "彩色"  
-        plt.title(f"{os.path.basename(img_path)}\n{result} (分数: {mono_score:.4f})")  
-        plt.axis('off')  
+        print(f"{i+1}. {os.path.basename(img_path)}: {result} (分数: {mono_score:.4f})")
+        
+        # 保存带标注的图片
+        img_copy = image.copy()
+        draw = ImageDraw.Draw(img_copy)
+        # 在图片上添加文本标注
+        draw.text((10, 10), f"{result} (分数: {mono_score:.4f})", fill="red")
+        output_path = f"monochrome_{i+1}_{os.path.basename(img_path)}"
+        img_copy.save(output_path)
+        print(f"   标注图片已保存为: {output_path}")
       
-    plt.tight_layout()  
-    plt.savefig("monochrome_detection_demo.png")  
-    plt.show()  
-    print("单色图片检测完成，结果已保存为 monochrome_detection_demo.png")  
+    print("单色图片检测完成")
   
 def demo_image_difference(image_paths):  
     """演示图片差分检测功能"""  
@@ -120,38 +97,54 @@ def demo_image_difference(image_paths):
     # 计算图片间的差异矩阵  
     n = len(image_paths)  
     diff_matrix = np.zeros((n, n))  
+    print("正在计算图片差异矩阵...")
     for i in range(n):  
         for j in range(i+1, n):  
+            print(f"计算 {os.path.basename(image_paths[i])} 与 {os.path.basename(image_paths[j])} 的差异...")
             diff = lpips_difference(image_paths[i], image_paths[j])  
             diff_matrix[i, j] = diff  
             diff_matrix[j, i] = diff  
+            print(f"差异值: {diff:.4f}")
       
     # 进行聚类  
+    print("正在进行图片聚类...")
     clusters = lpips_clustering(image_paths)  
       
     # 显示结果  
-    plt.figure(figsize=(15, 10))  
+    print("\n=== 差异矩阵结果 ===")
+    print("图片文件名:")
+    for i, img_path in enumerate(image_paths):
+        print(f"{i}: {os.path.basename(img_path)}")
+    
+    print("\n差异矩阵:")
+    print(f"{'':>15}", end="")
+    for i in range(n):
+        print(f"{i:>8}", end="")
+    print()
+    
+    for i in range(n):
+        print(f"{i:>2} {os.path.basename(image_paths[i])[:12]:>12}", end="")
+        for j in range(n):
+            print(f"{diff_matrix[i,j]:>8.4f}", end="")
+        print()
       
-    # 显示差异矩阵  
-    plt.subplot(2, 2, 1)  
-    plt.imshow(diff_matrix, cmap='viridis')  
-    plt.colorbar(label='LPIPS差异')  
-    plt.title("图片差异矩阵")  
-      
-    # 显示所有图片及其聚类结果  
+    # 显示聚类结果
+    print(f"\n=== 聚类结果 ===")
     for i, (img_path, cluster) in enumerate(zip(image_paths, clusters)):  
-        plt.subplot(2, 3, i+3)  
-        img = Image.open(img_path)  
-        plt.imshow(img)  
         cluster_label = "噪声" if cluster == -1 else f"聚类 {cluster}"  
-        plt.title(f"{os.path.basename(img_path)}\n{cluster_label}")  
-        plt.axis('off')  
+        print(f"{i+1}. {os.path.basename(img_path)}: {cluster_label}")
+        
+        # 保存聚类标注的图片
+        img = Image.open(img_path)
+        img_copy = img.copy()
+        draw = ImageDraw.Draw(img_copy)
+        draw.text((10, 10), cluster_label, fill="red")
+        output_path = f"cluster_{i+1}_{cluster_label.replace(' ', '_')}_{os.path.basename(img_path)}"
+        img_copy.save(output_path)
+        print(f"   标注图片已保存为: {output_path}")
       
-    plt.tight_layout()  
-    plt.savefig("image_difference_demo.png")  
-    plt.show()  
-    print("图片差分检测完成，结果已保存为 image_difference_demo.png")  
-    print(f"聚类结果: {clusters}")  
+    print("图片差分检测完成")  
+    print(f"聚类结果: {clusters}")
   
 def demo_edge_detection(image_path):  
     """演示线稿检测功能"""  
@@ -165,33 +158,17 @@ def demo_edge_detection(image_path):
     lineart_anime_image = edge_image_with_lineart_anime(image_path)  
     canny_image = edge_image_with_canny(image_path)  
       
-    # 显示结果  
-    plt.figure(figsize=(15, 10))  
-      
-    plt.subplot(2, 2, 1)  
-    plt.imshow(original_image)  
-    plt.title("原始图像")  
-    plt.axis('off')  
-      
-    plt.subplot(2, 2, 2)  
-    plt.imshow(lineart_image)  
-    plt.title("Lineart 线稿")  
-    plt.axis('off')  
-      
-    plt.subplot(2, 2, 3)  
-    plt.imshow(lineart_anime_image)  
-    plt.title("Lineart Anime 线稿")  
-    plt.axis('off')  
-      
-    plt.subplot(2, 2, 4)  
-    plt.imshow(canny_image)  
-    plt.title("Canny 线稿")  
-    plt.axis('off')  
-      
-    plt.tight_layout()  
-    plt.savefig("edge_detection_demo.png")  
-    plt.show()  
-    print("线稿检测完成，结果已保存为 edge_detection_demo.png")  
+    # 保存结果图像
+    lineart_image.save("edge_lineart.png")
+    print("Lineart 线稿已保存为 edge_lineart.png")
+    
+    lineart_anime_image.save("edge_lineart_anime.png")
+    print("Lineart Anime 线稿已保存为 edge_lineart_anime.png")
+    
+    canny_image.save("edge_canny.png")
+    print("Canny 线稿已保存为 edge_canny.png")
+    
+    print("线稿检测完成，所有结果图像已保存")
 
 def get_valid_image_path(prompt="请输入图像文件路径: "):
     """获取有效的图像文件路径"""

@@ -17,7 +17,8 @@ from imgfilter.detectors.gray.grayscale import GrayscaleImageDetector
 class ImageFilter:
     """图片过滤器，支持多种独立的过滤功能"""
     
-    def __init__(self, hash_file: str = None, hamming_threshold: int = 12, ref_hamming_threshold: int = None, max_workers: int = None):
+    def __init__(self, hash_file: str = None, hamming_threshold: int = 12, ref_hamming_threshold: int = None, 
+                max_workers: int = None, lpips_threshold: float = 0.02):
         """
         初始化过滤器
         
@@ -26,6 +27,7 @@ class ImageFilter:
             hamming_threshold: 汉明距离阈值
             ref_hamming_threshold: 哈希文件过滤的汉明距离阈值，默认使用hamming_threshold
             max_workers: 最大工作线程数，默认为CPU核心数
+            lpips_threshold: LPIPS相似度阈值，用于LPIPS模式
         """
         self.hash_file = hash_file
         self.hamming_threshold = hamming_threshold
@@ -38,7 +40,8 @@ class ImageFilter:
             hash_file=hash_file, 
             hamming_threshold=hamming_threshold, 
             ref_hamming_threshold=ref_hamming_threshold,
-            max_workers=max_workers
+            max_workers=max_workers,
+            lpips_threshold=lpips_threshold
         )
         self.small_image_detector = SmallImageDetector()
         self.grayscale_detector = GrayscaleImageDetector()
@@ -53,9 +56,10 @@ class ImageFilter:
         enable_duplicate_filter: bool = None,
         enable_text_filter: bool = None,
         min_size: int = 630,
-        duplicate_filter_mode: str = 'quality',  # 'quality', 'watermark' or 'hash'
+        duplicate_filter_mode: str = 'quality',  # 'quality', 'watermark', 'hash' or 'lpips'
         watermark_keywords: List[str] = None,  # 水印关键词列表
         ref_hamming_threshold: int = None,  # 哈希文件过滤的汉明距离阈值
+        lpips_threshold: float = None,  # LPIPS相似度阈值
         text_threshold: float = 0.5,  # 纯文本图片检测阈值
         archive_path: str = None,     # 压缩包路径
         temp_dir: str = None,         # 临时解压目录
@@ -73,9 +77,10 @@ class ImageFilter:
             enable_duplicate_filter: 是否启用重复图片过滤
             enable_text_filter: 是否启用纯文本图片过滤
             min_size: 最小图片尺寸
-            duplicate_filter_mode: 重复图片过滤模式 ('quality', 'watermark' 或 'hash')
+            duplicate_filter_mode: 重复图片过滤模式 ('quality', 'watermark', 'hash' 或 'lpips')
             watermark_keywords: 水印关键词列表，None时使用默认列表
             ref_hamming_threshold: 哈希文件过滤的汉明距离阈值，None时使用初始化时的值
+            lpips_threshold: LPIPS相似度阈值，None时使用初始化时的值
             text_threshold: 纯文本图片检测阈值
             archive_path: 压缩包路径
             temp_dir: 临时解压目录

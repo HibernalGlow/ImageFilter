@@ -573,29 +573,6 @@ class ImageHashCalculator:
                     logger.warning(f"[#update_log]读取哈希文件失败 {hash_file}: {e}")
                     continue
 
-            # ------ 新增：压缩包同名不同路径共用哈希 ------
-            db = get_db_cached()
-            uri_info = db.parse_uri(normalized_url)
-            if uri_info.get('source_type') == 'archive' and uri_info.get('filename'):
-                filename = uri_info['filename']
-                try:
-                    conn = db._get_connection()
-                    cursor = conn.execute(
-                        "SELECT * FROM image_hashes WHERE filename = ? AND source_type = 'archive' ORDER BY calculated_time DESC",
-                        (filename,)
-                    )
-                    rows = cursor.fetchall()
-                except Exception as e:
-                    logger.error(f"[hash_calc] 数据库同名压缩包查询失败: {e}")
-                    rows = []
-                if rows:
-                    hash_value = rows[0]['hash_value']
-                    # 插入当前路径新记录
-                    db.add_hash(normalized_url, hash_value)
-                    logger.info(f"[hash_calc] 同名不同路径压缩包共用哈希: {filename} -> {hash_value}")
-                    return hash_value
-            # ------ 新增逻辑结束 ------
-
             logger.debug(f"[#hash_calc]未找到哈希值: {normalized_url}")
             return None
             
@@ -629,8 +606,7 @@ class ImageHashCalculator:
             if url is None and isinstance(image_path_or_data, (str, Path)):
                 path_str = str(image_path_or_data)
                 url = PathURIGenerator.generate(path_str)
-            
-            # 优先从缓存查询（支持多进程预加载缓存和SQLite智能查询）
+              # 优先从缓存查询（支持多进程预加载缓存和SQLite智能查询）
             if url and MULTIPROCESS_CONFIG.get('enable_global_cache', True):
                 if use_preload:
                     cached_hash = HashCache.get_hash(url, use_preload=True)
@@ -654,6 +630,37 @@ class ImageHashCalculator:
                         'from_cache': True,
                         'storage_backend': storage_backend
                     }
+            
+            # ------ 新增：压缩包同名不同路径共用哈希 ------
+            # 在计算新哈希之前检查同名文件
+            if url and MULTIPROCESS_CONFIG.get('enable_global_cache', True):
+                db = get_db_cached()
+                uri_info = db.parse_uri(url)
+                if uri_info.get('source_type') == 'archive' and uri_info.get('filename'):
+                    filename = uri_info['filename']
+                    try:
+                        conn = db._get_connection()
+                        cursor = conn.execute(
+                            "SELECT * FROM image_hashes WHERE filename = ? AND source_type = 'archive' ORDER BY calculated_time DESC",
+                            (filename,)
+                        )
+                        rows = cursor.fetchall()
+                    except Exception as e:
+                        logger.error(f"[hash_calc] 数据库同名压缩包查询失败: {e}")
+                        rows = []
+                    if rows:
+                        hash_value = rows[0]['hash_value']
+                        # 插入当前路径新记录
+                        db.add_hash(url, hash_value)
+                        logger.info(f"[hash_calc] 同名不同路径压缩包共用哈希: {filename} -> {hash_value}")
+                        return {
+                            'hash': hash_value,
+                            'size': HASH_PARAMS['hash_size'], 
+                            'url': url,
+                            'from_cache': True,
+                            'storage_backend': 'sqlite_same_name'
+                        }
+            # ------ 新增逻辑结束 ------
             
             # 如果缓存中没有，则计算新的哈希值
             # 如果没有提供URL且输入是路径，则生成标准化的URI

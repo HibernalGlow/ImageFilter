@@ -380,10 +380,10 @@ class DuplicateImageDetector:
             for img_path in images:
                 if '!' in img_path:
                     # 暂不支持压缩包内文件的LPIPS比较
-                    logger.warning(f"[#lpips]暂不支持压缩包内文件的LPIPS比较: {img_path}")
+                    logger.warning(f"[#hash_calc]暂不支持压缩包内文件的LPIPS比较: {img_path}")
                     continue
                 if not os.path.exists(img_path) or not os.path.isfile(img_path):
-                    logger.warning(f"[#lpips]跳过不存在或非文件: {img_path}")
+                    logger.warning(f"[#hash_calc]跳过不存在或非文件: {img_path}")
                     continue
                 valid_images.append(img_path)
             
@@ -393,7 +393,7 @@ class DuplicateImageDetector:
                 logger.info(f"LPIPS找到 {len(similar_groups)} 个相似图片组")
                 return similar_groups
             except Exception as e:
-                logger.error(f"[#lpips]LPIPS查找相似图片失败: {e}，将回退到哈希方法")
+                logger.error(f"[#hash_calc]LPIPS查找相似图片失败: {e}，将回退到哈希方法")
                 # 回退到哈希方法
         
         # 计算所有图片的哈希值

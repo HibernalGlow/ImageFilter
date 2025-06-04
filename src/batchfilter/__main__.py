@@ -1,4 +1,3 @@
-
 import os
 import sys
 import argparse
@@ -291,12 +290,14 @@ class FilterConfig:
         parser.add_argument('--ref_hamming_threshold', type=int, 
                         help=f'内部去重的汉明距离阈值 ')
         parser.add_argument('--duplicate_filter_mode', type=str, default='quality',
-                        choices=['quality', 'watermark', 'hash'],
-                        help='重复图片过滤模式 (quality, watermark 或 hash)')
+                        choices=['quality', 'watermark', 'hash', 'lpips'],
+                        help='重复图片过滤模式 (quality, watermark, hash 或 lpips)')
         parser.add_argument('--hash_file', type=str,
                         help='哈希文件路径')
         parser.add_argument('--max_workers', type=int,
                         help='最大工作线程数')
+        parser.add_argument('--lpips_threshold', type=float, default=0.02,
+                        help='LPIPS相似度阈值 (0.0-1.0)，值越小检测越严格')
         parser.add_argument('--clipboard', '-c', action='store_true',
                         help='从剪贴板读取路径')
         parser.add_argument('--path', '-p', action='append', 
@@ -319,6 +320,7 @@ class FilterConfig:
             'ref_hamming_threshold': args.ref_hamming_threshold,
             'hash_file': args.hash_file,
             'max_workers': args.max_workers if args.max_workers else os.cpu_count() * 2,  # 默认CPU核心数2倍
+            'lpips_threshold': args.lpips_threshold,  # 添加LPIPS阈值
             'config': args  # 保留原始参数对象以兼容现有代码
         }
         
@@ -345,6 +347,14 @@ class FilterConfig:
                 "input_values": {
                     "ref_hamming_threshold": str(DEFAULT_HAMMING_DISTANCE),
                     "duplicate_filter_mode": "quality",
+                }
+            },
+            "LPIPS去重": {
+                "description": "使用LPIPS感知相似度去除重复图片",
+                "checkbox_options": ["enable_duplicate_filter", "clipboard"],
+                "input_values": {
+                    "duplicate_filter_mode": "lpips",
+                    "lpips_threshold": "0.02",
                 }
             },
             "去水印图": {
@@ -385,6 +395,15 @@ class FilterConfig:
                     "min_size": str(DEFAULT_MIN_SIZE),
                     "ref_hamming_threshold": str(DEFAULT_HAMMING_DISTANCE),
                     "duplicate_filter_mode": "quality",
+                }
+            },
+            "LPIPS完整过滤": {
+                "description": "使用LPIPS的完整过滤(去重+去小图+去黑白)",
+                "checkbox_options": ["merge_archives", "enable_small_filter", "enable_duplicate_filter", "enable_grayscale_filter", "clipboard"],
+                "input_values": {
+                    "min_size": str(DEFAULT_MIN_SIZE),
+                    "duplicate_filter_mode": "lpips",
+                    "lpips_threshold": "0.02",
                 }
             }
         }
