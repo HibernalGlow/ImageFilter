@@ -201,7 +201,7 @@ class DuplicateImageDetector:
     
     def __init__(self, hash_file: str = None, hamming_threshold: int = 12, 
                  ref_hamming_threshold: int = None, max_workers: int = None,
-                 lpips_threshold: float = 0.02):  # 添加LPIPS阈值参数
+                 lpips_threshold: float = 0.02, lpips_max_workers: int = 16):  # 添加LPIPS专用的最大工作进程数参数
         """
         初始化重复图片检测器
         
@@ -211,11 +211,13 @@ class DuplicateImageDetector:
             ref_hamming_threshold: 哈希文件过滤的汉明距离阈值，默认使用hamming_threshold
             max_workers: 最大工作进程数，默认为CPU核心数*2
             lpips_threshold: LPIPS距离阈值，用于LPIPS模式下相似图片检测
+            lpips_max_workers: LPIPS计算专用的最大工作进程数，默认为16
         """
         self.hash_file = hash_file
         self.hamming_threshold = hamming_threshold
         self.ref_hamming_threshold = ref_hamming_threshold if ref_hamming_threshold is not None else hamming_threshold
         self.max_workers = max_workers or multiprocessing.cpu_count()*2
+        self.lpips_max_workers = min(16 if lpips_max_workers is None else lpips_max_workers, self.max_workers)  # 确保不超过总的max_workers
         self.hash_cache = {}
         self.mmap_cache = {}  # 添加mmap缓存
         self.lpips_threshold = lpips_threshold  # 添加LPIPS阈值
@@ -241,6 +243,7 @@ class DuplicateImageDetector:
                          mode: str = 'quality', 
                          watermark_keywords: List[str] = None,
                          ref_hamming_threshold: int = None,
+                         lpips_max_workers: int = None,  # 添加LPIPS线程数参数
                          *args, **kwargs) -> Tuple[Set[str], Dict[str, Dict]]:
         """
         检测重复图片
@@ -253,12 +256,18 @@ class DuplicateImageDetector:
             mode: 重复过滤模式 ('quality', 'watermark', 'hash', 'lpips')
             watermark_keywords: 水印关键词列表，用于watermark模式
             ref_hamming_threshold: 哈希文件过滤的汉明距离阈值
+            lpips_max_workers: LPIPS计算专用的最大工作进程数
             
         Returns:
             Tuple[Set[str], Dict[str, Dict]]: (要删除的文件集合, 删除原因字典)
         """
         if not image_files:
             return set(), {}
+        
+        # 如果提供了lpips_max_workers参数，更新实例变量
+        if lpips_max_workers is not None:
+            self.lpips_max_workers = min(lpips_max_workers, self.max_workers)
+            logger.info(f"更新LPIPS计算进程数为: {self.lpips_max_workers}")
         
         # 先清理之前可能的缓存
         self._cleanup_mmap_cache()
@@ -819,43 +828,84 @@ class DuplicateImageDetector:
         # 计算图片间的差异矩阵
         n = len(images)
         diff_matrix = np.zeros((n, n))
-        logger.info(f"[#hash_calc]开始计算 {n} 张图像的LPIPS距离")
         
-        # 使用进程池计算LPIPS距离
-        with ProcessPoolExecutor(max_workers=self.max_workers) as executor:
-            # 创建任务列表
-            future_to_pair = {}
-            for i in range(n):
-                for j in range(i+1, n):
+        # 创建图片对列表
+        image_pairs = []
+        for i in range(n):
+            for j in range(i+1, n):
+                image_pairs.append((i, j, images[i], images[j]))
+        
+        # 初始化工作进程数
+        current_workers = self.lpips_max_workers
+        logger.info(f"[#hash_calc]开始计算 {n} 张图像的LPIPS距离，使用 {current_workers} 个进程")
+        
+        # 跟踪失败的对和重试次数
+        failed_pairs = []
+        retry_count = 0
+        max_retries = 3
+        
+        while retry_count <= max_retries and (image_pairs or failed_pairs):
+            # 如果是重试，减少进程数并使用失败的对
+            if retry_count > 0:
+                current_workers = max(1, current_workers // 2)
+                logger.warning(f"[#hash_calc]第 {retry_count} 次重试，降低进程数至 {current_workers}")
+                image_pairs = failed_pairs
+                failed_pairs = []
+            
+            # 使用进程池计算LPIPS距离，这里专门使用lpips_max_workers
+            with ProcessPoolExecutor(max_workers=16) as executor:# current_workers
+                # 创建任务列表
+                future_to_pair = {}
+                for i, j, img1, img2 in image_pairs:
                     future = executor.submit(
                         _calculate_lpips_worker,
-                        images[i],
-                        images[j]
+                        img1,
+                        img2
                     )
-                    future_to_pair[future] = (i, j)
-            
-            # 收集结果
-            completed = 0
-            total_pairs = len(future_to_pair)
-            for future in as_completed(future_to_pair):
-                i, j = future_to_pair[future]
-                completed += 1
+                    future_to_pair[future] = (i, j, img1, img2)
                 
-                try:
-                    (img1, img2), diff = future.result()
-                    diff_matrix[i, j] = diff
-                    diff_matrix[j, i] = diff
+                # 收集结果
+                completed = 0
+                total_pairs = len(future_to_pair)
+                
+                # 如果没有任务，直接跳过
+                if total_pairs == 0:
+                    break
                     
-                    # 每处理10%的图像对输出一次进度
-                    if completed % max(1, total_pairs // 10) == 0 or completed == total_pairs:
-                        progress = (completed / total_pairs) * 100
-                        logger.info(f"[#hash_calc]LPIPS计算进度: {completed}/{total_pairs} ({progress:.1f}%)")
+                for future in as_completed(future_to_pair):
+                    i, j, img1, img2 = future_to_pair[future]
+                    completed += 1
                     
-                    logger.info(f"[#hash_calc]LPIPS距离: {os.path.basename(images[i])} vs {os.path.basename(images[j])} = {diff:.4f}")
-                except Exception as e:
-                    logger.error(f"[#hash_calc]计算LPIPS距离失败 {images[i]} vs {images[j]}: {e}")
-                    diff_matrix[i, j] = float('inf')
-                    diff_matrix[j, i] = float('inf')
+                    try:
+                        (path1, path2), diff = future.result()
+                        diff_matrix[i, j] = diff
+                        diff_matrix[j, i] = diff
+                        
+                        # 每处理10%的图像对输出一次进度
+                        if completed % max(1, total_pairs // 10) == 0 or completed == total_pairs:
+                            progress = (completed / total_pairs) * 100
+                            logger.info(f"[#hash_calc]LPIPS计算进度: {completed}/{total_pairs} ({progress:.1f}%)")
+                        
+                        logger.info(f"[#hash_calc]LPIPS距离: {os.path.basename(img1)} vs {os.path.basename(img2)} = {diff:.4f}")
+                    except Exception as e:
+                        logger.error(f"[#hash_calc]计算LPIPS距离失败 {img1} vs {img2}: {e}")
+                        diff_matrix[i, j] = float('inf')
+                        diff_matrix[j, i] = float('inf')
+                        # 将失败的对添加到重试列表
+                        failed_pairs.append((i, j, img1, img2))
+            
+            # 如果没有失败的对，或者已经是CPU模式（只有1个进程），就退出循环
+            if not failed_pairs or current_workers <= 1:
+                break
+                
+            retry_count += 1
+            
+            # 如果是最后一次重试，尝试使用CPU模式
+            if retry_count == max_retries and failed_pairs:
+                # 强制使用CPU模式进行最后一次尝试
+                logger.warning("[#hash_calc]最后一次尝试：切换到CPU模式计算LPIPS")
+                os.environ['LPIPS_USE_GPU'] = '0'  # 临时切换到CPU模式
+                current_workers = 1  # 使用单进程避免内存问题
         
         # 构建相似性图
         similarity_graph = {img: [] for img in images}
@@ -875,6 +925,7 @@ class DuplicateImageDetector:
                     dfs(neighbor, component)
         
         # 查找所有连通分量
+        processed.clear()  # 重置处理标记
         for img in images:
             if img not in processed:
                 current_group = []
@@ -882,6 +933,9 @@ class DuplicateImageDetector:
                 if len(current_group) > 1:
                     similar_groups.append(current_group)
                     logger.info(f"找到相似图像组: {len(current_group)}张")
+        
+        # 恢复GPU设置，以免影响后续操作
+        os.environ['LPIPS_USE_GPU'] = '1'
         
         return similar_groups
         

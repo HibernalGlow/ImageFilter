@@ -47,6 +47,7 @@ dependencies = [
     "opencc-python-reimplemented",
     "typer>=0.15.4",
     "rich>=13.0.0",
+    "onnxruntime-gpu",
 ]
 
 [project.optional-dependencies]
