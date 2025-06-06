@@ -56,6 +56,36 @@ class BackupHandler:
                         extracted = True
                     except Exception as e:
                         logger.error(f"[bakf]zipfile备份文件失败 {arc_path}: {e}")
+                # zipfile也失败则用Bandizip
+                if not extracted:
+                    try:
+                        # 查找bz.exe路径
+                        bz_path = 'bz'  # 如果在PATH中
+                        # 常见安装路径
+                        common_paths = [
+                            r'C:\Program Files\Bandizip\bz.exe',
+                            r'C:\Program Files (x86)\Bandizip\bz.exe'
+                        ]
+                        for path in common_paths:
+                            if os.path.exists(path):
+                                bz_path = path
+                                break
+                                
+                        bandizip_cmd = [
+                            bz_path,
+                            'x',  # 解压
+                            f'-o:{os.path.dirname(dest_path)}',  # 输出目录
+                            zip_path,  # 压缩包路径
+                            arc_path  # 压缩包内文件路径
+                        ]
+                        result = subprocess.run(bandizip_cmd, capture_output=True)
+                        if result.returncode == 0 and os.path.exists(dest_path):
+                            extracted = True
+                        else:
+                            stderr = result.stderr.decode('utf-8', errors='ignore')
+                            logger.error(f"[bakf]Bandizip提取失败 {arc_path}: {stderr}")
+                    except Exception as e:
+                        logger.error(f"[bakf]Bandizip备份文件失败 {arc_path}: {e}")
                 backup_results[arc_path] = extracted
             except Exception as e:
                 logger.error(f"[bakf]备份文件失败 {arc_path}: {e}")
@@ -94,7 +124,7 @@ class BackupHandler:
             zip_path: 压缩包路径
             to_delete: 压缩包内路径集合
             removal_reasons: {压缩包内路径: {reason: 原因}}
-            options: 配置字典（如backup.enabled、trash_folder_name等）
+            options: 配置字典（如backup.enabled、trash_folder_name、force_delete等）
         Returns:
             (是否成功, 错误信息)
         """
@@ -102,15 +132,34 @@ class BackupHandler:
             if not to_delete:
                 logger.info("[bakf]没有需要删除的图片")
                 return True, "没有需要删除的图片"
-            # 备份
+                
+            # 获取选项参数
             trash_folder_name = options.get('trash_folder_name', 'trash') if options else 'trash'
+            force_delete = False  # 默认即使备份失败也删除
+            if options:
+                if hasattr(options, '__dict__'):
+                    force_delete = getattr(options.get('backup', {}), 'force_delete', True)
+                else:
+                    force_delete = options.get('backup', {}).get('force_delete', True)
+                    
+            # 备份
             backup_results = BackupHandler.backup_from_archive(
                 zip_path, to_delete, removal_reasons, trash_folder_name=trash_folder_name
             )
+            
+            # 检查备份结果
+            all_backed_up = all(backup_results.values()) if backup_results else False
+            if not all_backed_up and not force_delete:
+                logger.warning("[bakf]⚠️ 部分文件备份失败，根据设置取消删除操作")
+                return False, "部分文件备份失败，已取消删除操作"
+            elif not all_backed_up:
+                logger.warning("[bakf]⚠️ 部分文件备份失败，但根据设置将继续删除")
+                
             # delete.txt 路径
             delete_list_file = os.path.join(os.path.dirname(zip_path), '@delete.txt')
             with open(delete_list_file, 'w', encoding='utf-8') as f:
                 f.write('\n'.join(to_delete))
+                
             # 备份zip本体（可选）
             backup_enabled = False
             if options:
@@ -125,9 +174,13 @@ class BackupHandler:
                     logger.info(f"[bakf]✅ 源文件备份成功: {backup_path}")
                 else:
                     logger.warning(f"[bakf]⚠️ 源文件备份失败: {backup_path}")
-                    return False, "源文件备份失败"
+                    if not force_delete:
+                        return False, "源文件备份失败，已取消删除操作"
+                    else:
+                        logger.warning("[bakf]⚠️ 源文件备份失败，但根据设置将继续删除")
             else:
                 logger.info("[bakf]ℹ️ 备份功能已禁用，跳过备份")
+                
             # 用7z删除
             cmd = ['7z', 'd', zip_path, f'@{delete_list_file}']
             result = subprocess.run(cmd, capture_output=True, text=True)
