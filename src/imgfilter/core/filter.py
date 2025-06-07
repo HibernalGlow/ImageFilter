@@ -127,6 +127,7 @@ class ImageFilter:
                     mode=duplicate_filter_mode,
                     watermark_keywords=watermark_keywords,
                     ref_hamming_threshold=ref_hamming_threshold,
+                    lpips_threshold=lpips_threshold,
                     *args,
                     **kwargs
                 )

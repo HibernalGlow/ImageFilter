@@ -72,10 +72,6 @@ def setup_logger(app_name="app", project_root=None, console_output=True):
     logger.info(f"日志系统已初始化，应用名称: {app_name}")
     return logger, config_info
 
-# 初始化日志系统
-
-
-
 def cudain():
     """初始化CUDA环境"""
     cuda_path = os.environ.get('CUDA_PATH')
@@ -91,7 +87,11 @@ def cudain():
             except Exception as e:
                 logger.error(f"设置 DLL 目录失败: {e}")
 
-# CPU 模式下的聚类函数
+# 设置基础环境变量
+os.environ["HF_DATASETS_OFFLINE"] = "1"  
+os.environ["TRANSFORMERS_OFFLINE"] = "1"
+
+# CPU 模式下的聚类函数 - 修改为可导出的版本
 def lpips_clustering_cpu(image_files, threshold=0.04):
     """CPU 模式下的图片聚类实现
     
@@ -102,13 +102,22 @@ def lpips_clustering_cpu(image_files, threshold=0.04):
     Returns:
         list: 每个图片对应的聚类标签
     """
+    # 保存原始环境变量
+    old_env = os.environ.get('LPIPS_USE_GPU', '1')
+    
     # 设置环境变量强制使用CPU
     os.environ['LPIPS_USE_GPU'] = '0'
-    # 延迟导入，确保环境变量生效
-    from imgutils.metrics import lpips_clustering
-    return lpips_clustering(image_files, threshold=threshold)
+    
+    try:
+        # 延迟导入，确保环境变量生效
+        from imgutils.metrics import lpips_clustering
+        result = lpips_clustering(image_files, threshold=threshold)
+        return result
+    finally:
+        # 恢复原来的环境变量
+        os.environ['LPIPS_USE_GPU'] = old_env
 
-# GPU 模式下的聚类函数
+# GPU 模式下的聚类函数 - 修改为可导出的版本
 def lpips_clustering_gpu(image_files, threshold=0.04):
     """GPU 模式下的图片聚类实现
     
@@ -119,12 +128,25 @@ def lpips_clustering_gpu(image_files, threshold=0.04):
     Returns:
         list: 每个图片对应的聚类标签
     """
+    # 保存原始环境变量
+    old_env = os.environ.get('LPIPS_USE_GPU', '0')
+    
+    # 初始化CUDA环境
+    cudain()
+    
     # 设置环境变量以使用GPU
     os.environ['LPIPS_USE_GPU'] = '1'
-    # 延迟导入，确保环境变量生效
-    from imgutils.metrics import lpips_clustering
-    return lpips_clustering(image_files, threshold=threshold)
+    
+    try:
+        # 延迟导入，确保环境变量生效
+        from imgutils.metrics import lpips_clustering
+        result = lpips_clustering(image_files, threshold=threshold)
+        return result
+    finally:
+        # 恢复原来的环境变量
+        os.environ['LPIPS_USE_GPU'] = old_env
 
+# 以下为命令行工具的代码，在被导入时不会执行
 # 命令行参数解析
 def parse_args():
     parser = argparse.ArgumentParser(description="图片聚类工具")
@@ -136,22 +158,6 @@ def parse_args():
 # 支持的图片扩展名
 IMG_EXTS = {'.jpg', '.jpeg', '.png', '.bmp', '.webp', '.avif', '.jxl'}
 
-# 设置环境变量（基础设置）
-os.environ["HF_DATASETS_OFFLINE"] = "1"  
-os.environ["TRANSFORMERS_OFFLINE"] = "1"
-
-# 获取命令行参数以决定CPU/GPU模式
-args = parse_args()
-USE_GPU_MODE = args.gpu  # 默认为CPU模式
-
-# 根据模式初始化环境
-if USE_GPU_MODE:
-    logger.info("使用GPU模式")
-    cudain()
-else:
-    logger.info("使用CPU模式")
-    os.environ['LPIPS_USE_GPU'] = '0'
-
 def get_memory_usage():
     """获取当前进程的内存使用情况"""
     process = psutil.Process(os.getpid())
@@ -161,7 +167,7 @@ def get_memory_usage():
         'vms': memory_info.vms / (1024 * 1024),  # VMS (虚拟内存), MB
     }
 
-def log_system_info():
+def log_system_info(use_gpu_mode):
     """记录系统信息"""
     logger.info(f"系统信息: {platform.system()} {platform.version()}")
     logger.info(f"Python版本: {platform.python_version()}")
@@ -172,16 +178,16 @@ def log_system_info():
     logger.info(f"CUDA_PATH: {cuda_path}")
     
     # 记录环境变量和CPU/GPU模式
-    logger.info(f"运行模式: {'GPU模式' if USE_GPU_MODE else 'CPU模式'}")
+    logger.info(f"运行模式: {'GPU模式' if use_gpu_mode else 'CPU模式'}")
     logger.info(f"LPIPS_USE_GPU: {os.environ.get('LPIPS_USE_GPU', '未设置')}")
     
     # 尝试获取GPU信息
-    if USE_GPU_MODE:
+    if use_gpu_mode:
         try:
             import torch
             logger.info(f"PyTorch版本: {torch.__version__}")
             logger.info(f"CUDA可用: {torch.cuda.is_available()}")
-            if torch.cuda.is_available() and USE_GPU_MODE:
+            if torch.cuda.is_available() and use_gpu_mode:
                 logger.info(f"GPU设备: {torch.cuda.get_device_name(0)}")
         except ImportError:
             logger.warning("PyTorch未安装，无法获取GPU信息")
@@ -245,9 +251,24 @@ def batch_load_images(image_files, max_workers=8):
     return images
 
 def main():
+    # 初始化日志系统
+    logger, config_info = setup_logger(app_name="demo_cluster", console_output=True)
+    
+    # 获取命令行参数以决定CPU/GPU模式
+    args = parse_args()
+    USE_GPU_MODE = args.gpu  # 默认为CPU模式
+    
+    # 根据模式初始化环境
+    if USE_GPU_MODE:
+        logger.info("使用GPU模式")
+        cudain()
+    else:
+        logger.info("使用CPU模式")
+        os.environ['LPIPS_USE_GPU'] = '0'
+        
     logger.info("=== 图片聚类 HTML 报告生成器 ===")
     logger.info(f"当前运行模式: {'GPU模式' if USE_GPU_MODE else 'CPU模式'}")
-    log_system_info()
+    log_system_info(USE_GPU_MODE)
     memory_info = get_memory_usage()
     logger.info(f"内存占用: RSS={memory_info['rss']:.1f}MB, VMS={memory_info['vms']:.1f}MB")
     
@@ -289,13 +310,12 @@ def main():
     noise_count = clusters.count(-1) if -1 in clusters else 0
     logger.info(f"聚类结果: {num_clusters} 个聚类, {noise_count} 个未归类项")
     
-    # 生成HTML报告
+    # 生成HTML报告 - 包含所有项（包括噪音和未聚类项）
     output_html = os.path.join(folder, "cluster_report.html")
     generate_html_report(cluster_dict, output_html)
     logger.info("全部完成！请用浏览器打开报告查看聚类结果。")
 
 if __name__ == "__main__":
-    logger, config_info = setup_logger(app_name="demo_cluster", console_output=True)
     try:
         main()
     except KeyboardInterrupt:

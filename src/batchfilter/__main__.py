@@ -1,6 +1,7 @@
 import os
 import sys
 import argparse
+import json
 from pathlib import Path
 from typing import Dict, Any, List, Set, Tuple, Optional
 from imgfilter.utils.archive import ArchiveHandler,SUPPORTED_ARCHIVE_FORMATS
@@ -20,6 +21,10 @@ import os
 import sys
 from pathlib import Path
 from datetime import datetime
+from batchfilter.config_manager import ConfigManager
+
+# 创建配置管理器实例
+config_manager = ConfigManager()
 
 def setup_logger(app_name="app", project_root=None, console_output=True):
     """配置 Loguru 日志系统
@@ -79,74 +84,84 @@ def setup_logger(app_name="app", project_root=None, console_output=True):
     logger.info(f"日志系统已初始化，应用名称: {app_name}")
     return logger, config_info
 
-logger, config_info = setup_logger(app_name="batch_img_filter", console_output=False)
-# TextualLogger布局配置
-TEXTUAL_LAYOUT = {
-    "cur_stats": {
-        "ratio": 1,
-        "title": "📊 总体进度",
-        "style": "lightyellow"
-    },
-    "cur_progress": {
-        "ratio": 1,
-        "title": "🔄 当前进度",
-        "style": "lightcyan"
-    },
-    "file_ops": {
-        "ratio": 2,
-        "title": "📂 文件操作",
-        "style": "lightpink"
-    },
-    "hash_calc": {
-        "ratio": 2,
-        "title": "🔢 哈希计算",
-        "style": "lightblue"
-    },
-    "update_log": {
-        "ratio": 1,
-        "title": "🔧 系统消息",
-        "style": "lightwhite"
-    }
-}
+
+
+# 加载配置文件
+def load_config():
+    """从JSON文件加载配置"""
+    try:
+        config_path = os.path.join(os.path.dirname(__file__), "config.json")
+        with open(config_path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception as e:
+        logger.error(f"加载配置文件失败: {e}")
+        # 返回默认配置
+        return {
+            "default_settings": {
+                "min_size": 630,
+                "hamming_distance": 12,
+                "lpips_threshold": 0.02
+            },
+            "archive_settings": {
+                "blacklist_keywords": ["merged_", "temp_", "backup_", ".new", ".trash"]
+            },
+            "textual_layout": {
+            },
+            "preset_configs": {},
+            "archive_settings": {
+                "blacklist_keywords": ["merged_", "temp_", "backup_", ".new", ".trash"]
+            }
+        }
+
+# 加载配置
+CONFIG = load_config()
+# 从配置文件获取默认设置
+DEFAULT_MIN_SIZE = CONFIG["default_settings"]["min_size"]
+DEFAULT_HAMMING_DISTANCE = CONFIG["default_settings"]["hamming_distance"]
+DEFAULT_LPIPS_THRESHOLD = CONFIG["default_settings"]["lpips_threshold"]
+# 从配置文件获取TextualLogger布局
+TEXTUAL_LAYOUT = CONFIG["textual_layout"]
 
 # 初始化TextualLogger
 HAS_TUI = True
-
-# 常量定义
-DEFAULT_MIN_SIZE = 630
-DEFAULT_HAMMING_DISTANCE = 12
-
+CONFIG_INFO = {}
 def initialize_textual_logger():
     """初始化日志布局，确保在所有模式下都能正确初始化"""
+    
     try:
-        TextualLoggerManager.set_layout(TEXTUAL_LAYOUT, config_info['log_file'])
+        TextualLoggerManager.set_layout(TEXTUAL_LAYOUT, CONFIG_INFO['log_file'])
         logger.info("[#update_log]✅ 日志系统初始化完成")
     except Exception as e:
         print(f"❌ 日志系统初始化失败: {e}")
+
 class ArchiveMerger:
-    # 黑名单关键词列表，用于过滤不需要处理的文件
-    BLACKLIST_KEYWORDS = ['merged_', 'temp_', 'backup_', '.new', '.trash']
+    """压缩包合并处理类"""
     
     @staticmethod
-    def merge_archives(paths: List[str]) -> Tuple[Optional[str], Optional[str], List[str]]:
+    def merge_archives(paths: List[str], blacklist_keywords=None) -> Tuple[Optional[str], Optional[str], List[str]]:
         """
         将多个压缩包合并为一个临时压缩包
         
         Args:
             paths: 压缩包路径列表
+            blacklist_keywords: 黑名单关键词列表
             
         Returns:
             Tuple[str, str, List[str]]: (临时目录路径, 合并后的压缩包路径, 原始压缩包路径列表)
             如果失败则返回 (None, None, [])
             如果只有一个压缩包，则返回 (None, 原始压缩包路径, [原始压缩包路径])
         """
+        # 如果未提供黑名单关键词，则使用配置管理器中的默认值
+        if blacklist_keywords is None:
+            blacklist_keywords = config_manager.blacklist_keywords
+            
         temp_dir = None
         try:
             # 收集所有ZIP文件路径，同时排除黑名单中的关键词
             archive_paths = []
             for path in paths:
                 # 检查路径是否包含黑名单关键词
-                if any(keyword in path for keyword in ArchiveMerger.BLACKLIST_KEYWORDS):
+                if any(keyword in path for keyword in blacklist_keywords):
                     logger.info(f"[#file_ops]跳过黑名单文件: {path}")
                     continue
                     
@@ -155,7 +170,7 @@ class ArchiveMerger:
                         for f in files:
                             file_path = os.path.join(root, f)
                             # 检查文件是否是zip并且不在黑名单中
-                            if f.lower().endswith('.zip') and not any(keyword in f for keyword in ArchiveMerger.BLACKLIST_KEYWORDS):
+                            if f.lower().endswith('.zip') and not any(keyword in f for keyword in blacklist_keywords):
                                 archive_paths.append(file_path)
                             elif f.lower().endswith('.zip'):
                                 logger.info(f"[#file_ops]跳过黑名单压缩包: {f}")
@@ -214,6 +229,7 @@ class ArchiveMerger:
             if temp_dir and os.path.exists(temp_dir):
                 shutil.rmtree(temp_dir)
             return (None, None, [])
+            
     @staticmethod
     def split_merged_archive(processed_zip, original_archives, temp_dir, params):
         """
@@ -296,12 +312,14 @@ class FilterConfig:
                         help='哈希文件路径')
         parser.add_argument('--max_workers', type=int,
                         help='最大工作线程数')
-        parser.add_argument('--lpips_threshold', type=float, default=0.02,
-                        help='LPIPS相似度阈值 (0.0-1.0)，值越小检测越严格')
+        parser.add_argument('--lpips_threshold', type=float, default=config_manager.default_lpips_threshold,
+                        help=f'LPIPS相似度阈值 (0.0-1.0)，值越小检测越严格')
         parser.add_argument('--clipboard', '-c', action='store_true',
                         help='从剪贴板读取路径')
         parser.add_argument('--path', '-p', action='append', 
                         help='指定输入路径，可多次使用此参数以指定多个路径')
+        parser.add_argument('--notui', action='store_true',
+                        help='禁用TUI界面，使用简单的控制台输出')
         parser.add_argument('paths', nargs='*', help='输入路径')
         return parser
     
@@ -329,84 +347,7 @@ class FilterConfig:
         #     params['watermark_keywords'] = [kw.strip() for kw in args.watermark_keywords.split(',')]
             
         return params
-    
-    @staticmethod
-    def get_preset_configs() -> Dict[str, Dict[str, Any]]:
-        """获取预设配置"""
-        return {
-            "去小图": {
-                "description": "仅去除小尺寸图片",
-                "checkbox_options": ["enable_small_filter", "clipboard"],
-                "input_values": {
-                    "min_size": str(DEFAULT_MIN_SIZE),
-                }
-            },
-            "去重复": {
-                "description": "仅去除重复图片",
-                "checkbox_options": ["enable_duplicate_filter", "clipboard"],
-                "input_values": {
-                    "ref_hamming_threshold": str(DEFAULT_HAMMING_DISTANCE),
-                    "duplicate_filter_mode": "quality",
-                }
-            },
-            "LPIPS去重": {
-                "description": "使用LPIPS感知相似度去除重复图片",
-                "checkbox_options": ["enable_duplicate_filter", "clipboard"],
-                "input_values": {
-                    "duplicate_filter_mode": "lpips",
-                    "lpips_threshold": "0.02",
-                }
-            },
-            "去水印图": {
-                "description": "去除带水印的图片",
-                "checkbox_options": ["enable_duplicate_filter", "clipboard"],
-                "input_values": {
-                    "ref_hamming_threshold": str(DEFAULT_HAMMING_DISTANCE),
-                    "duplicate_filter_mode": "watermark",
-                }
-            },
-            "去黑白": {
-                "description": "仅去除黑白/白图",
-                "checkbox_options": ["enable_grayscale_filter", "clipboard"],
-                "input_values": {
-                }
-            },
-            "哈希比对": {
-                "description": "使用哈希文件比对去重",
-                "checkbox_options": ["enable_duplicate_filter", "clipboard"],
-                "input_values": {
-                    "duplicate_filter_mode": "hash",
-                    "hash_file": "",
-                    "ref_hamming_threshold": str(DEFAULT_HAMMING_DISTANCE),
-                }
-            },
-            "合并": {
-                "description": "合并多个压缩包并处理",
-                "checkbox_options": ["merge_archives", "enable_duplicate_filter","clipboard"],
-                "input_values": {
-                    "duplicate_filter_mode": "quality",
-                    "ref_hamming_threshold": str(1),
-                }
-            },
-            "完整过滤": {
-                "description": "完整过滤(去重+去小图+去黑白+去文本)",
-                "checkbox_options": ["merge_archives", "enable_small_filter", "enable_duplicate_filter", "enable_grayscale_filter", "clipboard"],
-                "input_values": {
-                    "min_size": str(DEFAULT_MIN_SIZE),
-                    "ref_hamming_threshold": str(DEFAULT_HAMMING_DISTANCE),
-                    "duplicate_filter_mode": "quality",
-                }
-            },
-            "LPIPS完整过滤": {
-                "description": "使用LPIPS的完整过滤(去重+去小图+去黑白)",
-                "checkbox_options": ["merge_archives", "enable_small_filter", "enable_duplicate_filter", "enable_grayscale_filter", "clipboard"],
-                "input_values": {
-                    "min_size": str(DEFAULT_MIN_SIZE),
-                    "duplicate_filter_mode": "lpips",
-                    "lpips_threshold": "0.02",
-                }
-            }
-        }
+
 class FilterProcessor:
     """过滤处理类"""
     
@@ -576,7 +517,6 @@ class Application:
         """初始化应用"""
         # 添加父目录到Python路径
         sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-        # 初始化TextualLogger
     
     def process_with_args(self, args) -> bool:
         """处理命令行参数
@@ -587,6 +527,12 @@ class Application:
         Returns:
             bool: 处理是否成功
         """
+        # 设置日志系统，根据命令行参数决定是否使用TUI
+        use_tui = not args.notui
+        config_manager.setup_logger(app_name="batch_img_filter", use_tui=use_tui, force_console=not use_tui)
+        
+        if use_tui:
+            initialize_textual_logger()
 
         # 获取输入路径 (合并 paths 和 path 参数)
         cli_paths = args.paths
@@ -605,10 +551,12 @@ class Application:
             logger.error('[#update_log]未提供任何输入路径')
             return False
         
-        if HAS_TUI:
-            initialize_textual_logger()
         # 构建过滤参数字典
         filter_params = FilterConfig.build_filter_params(args)
+        
+        # 日志记录参数
+        logger.info(f"[#update_log]使用参数: duplicate_filter_mode={filter_params['duplicate_filter_mode']}, " +
+                   f"lpips_threshold={filter_params['lpips_threshold']}")
 
         # 将路径分组处理
         path_groups = InputHandler.group_input_paths(paths)
@@ -635,7 +583,7 @@ class Application:
     def run_tui_mode(self):
         """运行TUI界面模式"""
         parser = FilterConfig.create_parser()
-        preset_configs = FilterConfig.get_preset_configs()
+        preset_configs = config_manager.get_preset_configs()
 
         def on_run(params: dict):
             """TUI配置界面的回调函数"""
@@ -695,6 +643,8 @@ class Application:
                 
             # TUI模式处理
             else:
+                # 初始化日志系统（默认使用TUI模式）
+                config_manager.setup_logger(app_name="batch_img_filter", use_tui=True)
                 self.run_tui_mode()
                 return 0
                 
