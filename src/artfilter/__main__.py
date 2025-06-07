@@ -82,7 +82,7 @@ logger, config_info = setup_logger(app_name="artfilter", console_output=True)
 
 # 参数配置
 DEFAULT_PARAMS = {
-    'ref_hamming_distance': 16,  # 与外部参考文件比较的汉明距离阈值
+    'ref_hamming_distance': 24,  # 与外部参考文件比较的汉明距离阈值
     'hash_size': 10,  # 哈希值大小
     'filter_white_enabled': False,  # 是否启用白图过滤
 }

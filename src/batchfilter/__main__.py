@@ -433,13 +433,6 @@ class Application:
         use_tui = not args.notui
         config_manager.setup_logger(app_name="batch_img_filter", use_tui=use_tui, force_console=not use_tui)
         
-        if use_tui:
-            # 使用TUI模式，初始化TextualLogger
-            initialize_textual_logger()
-        else:
-            # 非TUI模式，输出提示
-            logger.info("已启用控制台输出模式")
-
         # 获取输入路径 (合并 paths 和 path 参数)
         cli_paths = args.paths
         if hasattr(args, 'path') and args.path:
@@ -456,7 +449,13 @@ class Application:
         if not paths:
             logger.error('[#update_log]未提供任何输入路径')
             return False
-        
+        if use_tui:
+            # 使用TUI模式，初始化TextualLogger
+            initialize_textual_logger()
+        else:
+            # 非TUI模式，输出提示
+            logger.info("已启用控制台输出模式")
+
         # 构建过滤参数字典
         filter_params = FilterConfig.build_filter_params(args)
         
