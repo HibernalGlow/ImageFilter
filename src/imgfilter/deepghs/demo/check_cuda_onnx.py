@@ -1,13 +1,11 @@
 import os
 import sys
-from loguru import logger
-import os
-import sys
 from pathlib import Path
 from datetime import datetime
 import traceback
 import ctypes
 from ctypes import windll, c_wchar_p, c_ulong
+
 
 def setup_logger(app_name="app", project_root=None, console_output=True):
     """配置 Loguru 日志系统
@@ -66,6 +64,11 @@ def setup_logger(app_name="app", project_root=None, console_output=True):
     
     logger.info(f"日志系统已初始化，应用名称: {app_name}")
     return logger, config_info
+
+logger, config_info = setup_logger(app_name="check_cuda_onnx", console_output=True)
+
+
+
 
 # Windows API 错误码获取和信息提取
 def get_last_error_message():
