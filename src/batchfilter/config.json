@@ -51,7 +51,7 @@
             }
         },
         "LPIPS去重": {
-            "description": "使用LPIPS感知相似度去除重复图片",
+            "description": "使用LPIPS感知相似度去除重复图片（禁用TUI）",
             "checkbox_options": ["enable_duplicate_filter", "clipboard", "notui"],
             "input_values": {
                 "duplicate_filter_mode": "lpips",
@@ -98,8 +98,8 @@
             }
         },
         "LPIPS完整过滤": {
-            "description": "使用LPIPS的完整过滤(去重+去小图+去黑白)",
-            "checkbox_options": ["merge_archives", "enable_small_filter", "enable_duplicate_filter", "enable_grayscale_filter", "clipboard"],
+            "description": "使用LPIPS的完整过滤(去重+去小图+去黑白)（禁用TUI）",
+            "checkbox_options": ["merge_archives", "enable_small_filter", "enable_duplicate_filter", "enable_grayscale_filter", "clipboard", "notui"],
             "input_values": {
                 "min_size": "630",
                 "duplicate_filter_mode": "lpips",

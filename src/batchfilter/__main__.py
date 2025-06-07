@@ -17,122 +17,24 @@ from typing import List, Tuple, Optional
 from send2trash import send2trash
 # 配置日志
 from loguru import logger
-import os
-import sys
-from pathlib import Path
 from datetime import datetime
 from batchfilter.config_manager import ConfigManager
+from loguru import logger
 
 # 创建配置管理器实例
 config_manager = ConfigManager()
 
-def setup_logger(app_name="app", project_root=None, console_output=True):
-    """配置 Loguru 日志系统
-    
-    Args:
-        app_name: 应用名称，用于日志目录
-        project_root: 项目根目录，默认为当前文件所在目录
-        console_output: 是否输出到控制台，默认为True
-        
-    Returns:
-        tuple: (logger, config_info)
-            - logger: 配置好的 logger 实例
-            - config_info: 包含日志配置信息的字典
-    """
-    # 获取项目根目录
-    if project_root is None:
-        project_root = Path(__file__).parent.resolve()
-    
-    # 清除默认处理器
-    logger.remove()
-    
-    # 有条件地添加控制台处理器（简洁版格式）
-    if console_output:
-        logger.add(
-            sys.stdout,
-            level="INFO",
-            format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <blue>{elapsed}</blue> | <level>{level.icon} {level: <8}</level> | <cyan>{name}:{function}:{line}</cyan> - <level>{message}</level>"
-        )
-    
-    # 使用 datetime 构建日志路径
-    current_time = datetime.now()
-    date_str = current_time.strftime("%Y-%m-%d")
-    hour_str = current_time.strftime("%H")
-    minute_str = current_time.strftime("%M%S")
-    
-    # 构建日志目录和文件路径
-    log_dir = os.path.join(project_root, "logs", app_name, date_str, hour_str)
-    os.makedirs(log_dir, exist_ok=True)
-    log_file = os.path.join(log_dir, f"{minute_str}.log")
-    
-    # 添加文件处理器
-    logger.add(
-        log_file,
-        level="DEBUG",
-        rotation="10 MB",
-        retention="30 days",
-        compression="zip",
-        encoding="utf-8",
-        format="{time:YYYY-MM-DD HH:mm:ss} | {elapsed} | {level.icon} {level: <8} | {name}:{function}:{line} - {message}",
-    )
-    
-    # 创建配置信息字典
-    config_info = {
-        'log_file': log_file,
-    }
-    
-    logger.info(f"日志系统已初始化，应用名称: {app_name}")
-    return logger, config_info
-
-
-
-# 加载配置文件
-def load_config():
-    """从JSON文件加载配置"""
-    try:
-        config_path = os.path.join(os.path.dirname(__file__), "config.json")
-        with open(config_path, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except Exception as e:
-        logger.error(f"加载配置文件失败: {e}")
-        # 返回默认配置
-        return {
-            "default_settings": {
-                "min_size": 630,
-                "hamming_distance": 12,
-                "lpips_threshold": 0.02
-            },
-            "archive_settings": {
-                "blacklist_keywords": ["merged_", "temp_", "backup_", ".new", ".trash"]
-            },
-            "textual_layout": {
-            },
-            "preset_configs": {},
-            "archive_settings": {
-                "blacklist_keywords": ["merged_", "temp_", "backup_", ".new", ".trash"]
-            }
-        }
-
-# 加载配置
-CONFIG = load_config()
-# 从配置文件获取默认设置
-DEFAULT_MIN_SIZE = CONFIG["default_settings"]["min_size"]
-DEFAULT_HAMMING_DISTANCE = CONFIG["default_settings"]["hamming_distance"]
-DEFAULT_LPIPS_THRESHOLD = CONFIG["default_settings"]["lpips_threshold"]
-# 从配置文件获取TextualLogger布局
-TEXTUAL_LAYOUT = CONFIG["textual_layout"]
-
-# 初始化TextualLogger
-HAS_TUI = True
-CONFIG_INFO = {}
 def initialize_textual_logger():
     """初始化日志布局，确保在所有模式下都能正确初始化"""
-    
     try:
-        TextualLoggerManager.set_layout(TEXTUAL_LAYOUT, CONFIG_INFO['log_file'])
+        if not config_manager.logger_config or 'log_file' not in config_manager.logger_config:
+            logger.error("无法初始化TextualLogger: 日志文件路径未配置")
+            return
+            
+        TextualLoggerManager.set_layout(config_manager.textual_layout, config_manager.logger_config['log_file'])
         logger.info("[#update_log]✅ 日志系统初始化完成")
     except Exception as e:
-        print(f"❌ 日志系统初始化失败: {e}")
+        logger.error(f"❌ 日志系统初始化失败: {e}")
 
 class ArchiveMerger:
     """压缩包合并处理类"""
@@ -532,7 +434,11 @@ class Application:
         config_manager.setup_logger(app_name="batch_img_filter", use_tui=use_tui, force_console=not use_tui)
         
         if use_tui:
+            # 使用TUI模式，初始化TextualLogger
             initialize_textual_logger()
+        else:
+            # 非TUI模式，输出提示
+            logger.info("已启用控制台输出模式")
 
         # 获取输入路径 (合并 paths 和 path 参数)
         cli_paths = args.paths
@@ -649,7 +555,12 @@ class Application:
                 return 0
                 
         except Exception as e:
-            logger.exception(f"[#update_log]错误信息: {e}")
+            # 确保异常也能正确记录到日志
+            try:
+                logger.exception(f"[#update_log]错误信息: {e}")
+            except:
+                # 如果logger未初始化，则直接输出到控制台
+                print(f"错误信息: {e}")
             return 1
 
 # 主程序入口

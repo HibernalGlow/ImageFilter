@@ -139,10 +139,9 @@ class ConfigManager:
             'log_file': log_file,
         }
         
-        message = f"日志系统已初始化，应用名称: {app_name}"
-        if not use_tui:
-            message += "，TUI界面已禁用，使用控制台输出"
-        logger.info(message)
+        # 记录日志系统初始化信息
+        status_message = "TUI界面" if use_tui else "控制台输出"
+        logger.info(f"日志系统已初始化，应用名称: {app_name}，使用模式: {status_message}")
         
         return self.logger_config
     
