@@ -1,0 +1,94 @@
+[
+  {
+    "name": "中文优先配置",
+    "description": "OCR优先(中文模型) -> 时间 -> 大小",
+    "config": [
+      {
+        "type": "ocr",
+        "params": {
+          "model": "ch_PP-OCRv4_rec"
+        }
+      },
+      {
+        "type": "time",
+        "params": {}
+      },
+      {
+        "type": "size",
+        "params": {}
+      }
+    ]
+  },
+  {
+    "name": "英文优先配置",
+    "description": "OCR优先(英文模型) -> 大小",
+    "config": [
+      {
+        "type": "ocr",
+        "params": {
+          "model": "en_PP-OCRv4_rec"
+        }
+      },
+      {
+        "type": "size",
+        "params": {}
+      }
+    ]
+  },
+  {
+    "name": "日文优先配置",
+    "description": "OCR优先(日文模型) -> 时间",
+    "config": [
+      {
+        "type": "ocr",
+        "params": {
+          "model": "japan_PP-OCRv3_rec"
+        }
+      },
+      {
+        "type": "time",
+        "params": {}
+      }
+    ]
+  },
+  {
+    "name": "时间优先配置",
+    "description": "时间优先 -> OCR -> 大小",
+    "config": [
+      {
+        "type": "time",
+        "params": {}
+      },
+      {
+        "type": "ocr",
+        "params": {
+          "model": "ch_PP-OCRv4_rec"
+        }
+      },
+      {
+        "type": "size",
+        "params": {}
+      }
+    ]
+  },
+  {
+    "name": "大小优先配置",
+    "description": "大小优先 -> OCR -> 时间",
+    "config": [
+      {
+        "type": "size",
+        "params": {}
+      },
+      {
+        "type": "ocr",
+        "params": {
+          "model": "ch_PP-OCRv4_rec"
+        }
+      },
+      {
+        "type": "time",
+        "params": {}
+      }
+    ]
+  }
+] 

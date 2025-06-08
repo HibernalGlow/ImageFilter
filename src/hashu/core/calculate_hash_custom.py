@@ -50,7 +50,12 @@ _config = get_config()
 # 全局配置（保持向后兼容性）
 GLOBAL_HASH_FILES = _config.get_json_hash_files()
 CACHE_TIMEOUT = _config.get_cache_timeout()
-HASH_FILES_LIST = _config.get_json_hash_files()
+# 修改HASH_FILES_LIST的定义，确保它是一个字符串而不是列表
+# 如果get_json_hash_files返回的是列表，则取最后一个元素的目录加上hash_files_list.txt
+if isinstance(GLOBAL_HASH_FILES, list) and GLOBAL_HASH_FILES:
+    HASH_FILES_LIST = str(Path(GLOBAL_HASH_FILES[-1]).parent / "hash_files_list.txt")
+else:
+    HASH_FILES_LIST = str(Path(_config.get_cache_dir()) / "hash_files_list.txt")
 
 # 哈希计算参数
 HASH_PARAMS = _config.get_hash_params()
@@ -1005,13 +1010,24 @@ class ImageHashCalculator:
             return {}
 
     @staticmethod
-    def save_hash_file_path(file_path: str) -> None:
+    def save_hash_file_path(file_path) -> None:
         """将哈希文件路径保存到路径集合文件中
         
         Args:
-            file_path: 要保存的哈希文件路径
+            file_path: 要保存的哈希文件路径（字符串或可以转换为字符串的对象）
         """
         try:
+            # 处理不同类型的输入
+            if isinstance(file_path, list):
+                # 如果是列表，尝试使用最后一个元素
+                if file_path:
+                    file_path = str(file_path[-1])
+                else:
+                    raise TypeError("无法从空列表获取文件路径")
+            elif not isinstance(file_path, (str, bytes, os.PathLike)):
+                # 如果不是字符串、字节或PathLike对象，尝试转换为字符串
+                file_path = str(file_path)
+                
             # 确保目录存在
             os.makedirs(os.path.dirname(HASH_FILES_LIST), exist_ok=True)
             # 追加模式写入路径
@@ -1130,7 +1146,7 @@ class ImageHashCalculator:
         hashes, params = ImageHashCalculator.load_hashes(file_path)
         if hashes:
             ImageHashCalculator.save_hash_results(
-                results={uri: ProcessResult(h, None, None) for uri, h in hashes.items()},
+                results={uri: ProcessResult(uri=uri, hash_value={"hash": h}, file_type="unknown", original_path=None) for uri, h in hashes.items()},
                 output_path=file_path,
                 dry_run=False
             )

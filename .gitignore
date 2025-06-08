@@ -19,3 +19,11 @@ text_image_cache.json
 
 src/badzfilter/archive_check_history.json
 phash_benchmark_report.html
+*.jpeg
+*.jpg
+*.png
+*.webp
+*.jxl
+*.avif
+*.heic
+*.heif

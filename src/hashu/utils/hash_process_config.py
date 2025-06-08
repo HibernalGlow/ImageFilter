@@ -7,7 +7,7 @@ import threading
 from pathlib import Path
 from typing import Optional, Dict, List
 import dotenv
-from loguru import logger
+from hashu.log import logger
 
 dotenv.load_dotenv()
 
