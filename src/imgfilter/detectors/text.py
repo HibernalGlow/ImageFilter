@@ -38,6 +38,9 @@ class CVTextImageDetector:
         self.cache_file = cache_file or os.path.join(os.path.dirname(__file__), 'cv_text_image_cache.json')
         self.detection_cache = self._load_cache()
         self.grayscale_detector = GrayscaleDetector(GrayscaleConfig())
+        # 智能调整参数
+        self.max_keep_count = 20  # 最大保留图片数量
+        self.max_keep_ratio = 0.2  # 最大保留比例 (20%)
 
     def _load_cache(self) -> Dict:
         """加载缓存"""
@@ -466,41 +469,115 @@ class CVTextImageDetector:
             logger.error(f"颜色分析失败: {e}")
             return 0, {'error': str(e)}
 
-    def apply_text_filter(self, image_files: List[str], threshold: float = 0.5) -> List[Tuple[str, float]]:
+    def _smart_adjust_threshold(self, image_files: List[str], initial_threshold: float = 0.5) -> Tuple[float, List[Tuple[str, float]]]:
+        """
+        智能调整阈值，确保保留的图片数量在合理范围内
+        
+        Args:
+            image_files: 图片文件路径列表
+            initial_threshold: 初始阈值
+            
+        Returns:
+            Tuple[float, List[Tuple[str, float]]]: (最终使用的阈值, 要删除的图片列表)
+        """
+        total_images = len(image_files)
+        max_delete_count = max(total_images - self.max_keep_count, 
+                              total_images - int(total_images * (1 - self.max_keep_ratio)))
+        
+        logger.info(f"智能阈值调整: 总图片数={total_images}, 最大删除数={max_delete_count}")
+        
+        # 阈值调整范围和步长
+        threshold_candidates = [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+        best_threshold = initial_threshold
+        best_result = []
+        
+        # 尝试不同阈值，找到最适合的
+        for threshold in threshold_candidates:
+            logger.info(f"尝试阈值: {threshold}")
+            
+            # 使用当前阈值检测
+            current_result = []
+            for img_path in image_files:
+                try:
+                    is_text_image, result = self.detect_text_image(img_path, threshold)
+                    score = result.get('total_score', 0) if isinstance(result, dict) else result
+                    
+                    if is_text_image:
+                        current_result.append((img_path, score))
+                except Exception as e:
+                    logger.error(f"检测失败 {img_path}: {e}")
+                    continue
+            
+            delete_count = len(current_result)
+            logger.info(f"阈值 {threshold}: 检测到 {delete_count} 张文本图片")
+            
+            # 如果删除数量在合理范围内，使用此阈值
+            if delete_count <= max_delete_count:
+                best_threshold = threshold
+                best_result = current_result
+                logger.info(f"选择阈值 {threshold}: 删除 {delete_count} 张图片")
+                break
+            else:
+                # 记录当前最优结果
+                if not best_result or delete_count < len(best_result):
+                    best_threshold = threshold
+                    best_result = current_result
+        
+        # 如果所有阈值都超出限制，选择删除数量最少的
+        if len(best_result) > max_delete_count:
+            logger.warning(f"所有阈值都超出限制，使用阈值 {best_threshold} (删除 {len(best_result)} 张)")
+            
+            # 按分数排序，优先删除分数最高的（最明显的文本图片）
+            best_result.sort(key=lambda x: x[1], reverse=True)
+            best_result = best_result[:max_delete_count]
+            logger.info(f"限制删除数量为 {len(best_result)} 张")
+        
+        return best_threshold, best_result
+
+    def apply_text_filter(self, image_files: List[str], threshold: float = 0.5, use_smart_adjustment: bool = True) -> List[Tuple[str, float]]:
         """
         应用纯文本图片过滤，返回要删除的图片和检测分数
         
         Args:
             image_files: 图片文件路径列表
             threshold: 文本图片检测阈值
+            use_smart_adjustment: 是否使用智能阈值调整
         
         Returns:
             List[Tuple[str, float]]: (待删除图片路径, 文本检测分数)列表
         """
-        to_delete = []
-        
-        # 检测每张图片是否为文本图片
-        for img_path in image_files:
-            try:
-                is_text_image, result = self.detect_text_image(img_path, threshold)
-                score = result.get('total_score', 0) if isinstance(result, dict) else result
-                
-                if is_text_image:
-                    to_delete.append((img_path, score))
-                    # 只记录基础名称，不记录完整路径
-                    logger.info(f"图片文本检测结果 [{os.path.basename(img_path)}]: 总分={score}/4, 是否文本图片={is_text_image}")
-            except Exception as e:
-                logger.error(f"处理纯文本图片检测失败 {img_path}: {e}")
-        
-        return to_delete
+        if use_smart_adjustment:
+            # 使用智能调整
+            final_threshold, to_delete = self._smart_adjust_threshold(image_files, threshold)
+            logger.info(f"智能调整完成: 使用阈值 {final_threshold}, 删除 {len(to_delete)} 张图片")
+            return to_delete
+        else:
+            # 使用原有逻辑
+            to_delete = []
+            
+            # 检测每张图片是否为文本图片
+            for img_path in image_files:
+                try:
+                    is_text_image, result = self.detect_text_image(img_path, threshold)
+                    score = result.get('total_score', 0) if isinstance(result, dict) else result
+                    
+                    if is_text_image:
+                        to_delete.append((img_path, score))
+                        # 只记录基础名称，不记录完整路径
+                        logger.info(f"图片文本检测结果 [{os.path.basename(img_path)}]: 总分={score}/4, 是否文本图片={is_text_image}")
+                except Exception as e:
+                    logger.error(f"处理纯文本图片检测失败 {img_path}: {e}")
+            
+            return to_delete
 
-    def process_text_images(self, image_files: List[str], threshold: float = 0.5) -> Tuple[Set[str], Dict[str, Dict]]:
+    def process_text_images(self, image_files: List[str], threshold: float = 0.5, use_smart_adjustment: bool = True) -> Tuple[Set[str], Dict[str, Dict]]:
         """
         处理纯文本图片过滤，提供完整的过滤结果
         
         Args:
             image_files: 图片文件路径列表
             threshold: 文本图片检测阈值
+            use_smart_adjustment: 是否使用智能阈值调整
         
         Returns:
             Tuple[Set[str], Dict[str, Dict]]: (要删除的文件集合, 删除原因字典)
@@ -508,8 +585,8 @@ class CVTextImageDetector:
         to_delete = set()
         removal_reasons = {}
         
-        # 使用内部方法进行过滤
-        deleted_files = self.apply_text_filter(image_files, threshold)
+        # 使用智能调整或传统方法进行过滤
+        deleted_files = self.apply_text_filter(image_files, threshold, use_smart_adjustment)
         for img, score in deleted_files:
             to_delete.add(img)
             removal_reasons[img] = {
@@ -522,26 +599,23 @@ class CVTextImageDetector:
         return to_delete, removal_reasons
 
 
-def test_cv_text_image_detector(test_dir: str = None, debug: bool = False):
+def test_cv_text_image_detector(test_dir: str = None, debug: bool = False, test_smart_adjustment: bool = True):
     """测试基于计算机视觉的纯文本图片检测功能
     
     Args:
         test_dir: 测试图片目录，默认为脚本所在目录下的test_images
         debug: 是否启用调试模式
+        test_smart_adjustment: 是否测试智能阈值调整功能
     """
     # 获取脚本所在目录
     script_dir = Path(__file__).parent
-    test_dir = Path(test_dir) if test_dir else script_dir / "test"
+    test_dir = Path(input("请输入测试图片目录（默认使用脚本所在目录下的test_images）: ") or (script_dir / 'test_images'))
     
     # 确保测试目录存在
     test_dir.mkdir(exist_ok=True)
     
     # 设置调试模式
-    global DEBUG_MODE
-    DEBUG_MODE = debug
-    if DEBUG_MODE:
-        logger.setLevel(logging.DEBUG)
-        logger.info("已启用调试模式")
+
     
     # 检查测试目录中的图片
     image_files = []
@@ -559,6 +633,36 @@ def test_cv_text_image_detector(test_dir: str = None, debug: bool = False):
     
     # 对所有图片进行检测
     logger.info(f"开始检测文本图片，共 {len(image_files)} 个文件...")
+    
+    if test_smart_adjustment:
+        logger.info("\n=== 测试智能阈值调整功能 ===")
+        # 测试智能调整功能
+        smart_to_delete = detector.apply_text_filter([str(f) for f in image_files], use_smart_adjustment=True)
+        logger.info(f"智能调整后要删除的图片数量: {len(smart_to_delete)}")
+        
+        if smart_to_delete:
+            logger.info("智能调整删除的图片:")
+            for img_path, score in smart_to_delete:
+                logger.info(f"  - {os.path.basename(img_path)}: {score:.2f}/4")
+        
+        logger.info("\n=== 对比传统方法 ===")
+        # 对比传统方法
+        traditional_to_delete = detector.apply_text_filter([str(f) for f in image_files], use_smart_adjustment=False)
+        logger.info(f"传统方法要删除的图片数量: {len(traditional_to_delete)}")
+        
+        if traditional_to_delete:
+            logger.info("传统方法删除的图片:")
+            for img_path, score in traditional_to_delete:
+                logger.info(f"  - {os.path.basename(img_path)}: {score:.2f}/4")
+        
+        # 输出对比结果
+        logger.info(f"\n智能调整效果:")
+        logger.info(f"传统方法删除数量: {len(traditional_to_delete)}")
+        logger.info(f"智能调整删除数量: {len(smart_to_delete)}")
+        saved_count = len(traditional_to_delete) - len(smart_to_delete)
+        logger.info(f"智能调整节省了: {saved_count} 张图片")
+        
+        return
     
     text_images = []
     non_text_images = []

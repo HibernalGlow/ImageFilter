@@ -27,3 +27,4 @@ phash_benchmark_report.html
 *.avif
 *.heic
 *.heif
+/src/imgfilter/detectors/cv_text_image_cache.json

@@ -10,18 +10,9 @@ import pillow_jxl
 from loguru import logger
 from pathlib import Path
 
-# 导入OCR相关函数
-try:
-    from imgutils.ocr import ocr, list_rec_models
-except ImportError:
-    logger.warning("无法导入imgutils.ocr，将使用模拟OCR功能")
-    # 如果无法导入，使用模拟函数
-    def ocr(image, detect_model="ch_PP-OCRv4_det", recognize_model="ch_PP-OCRv4_rec", **kwargs):
-        logger.warning("使用模拟OCR功能，请安装imgutils库获取完整功能")
-        return []
-    
-    def list_rec_models():
-        return ["ch_PP-OCRv4_rec", "en_PP-OCRv4_rec", "japan_PP-OCRv3_rec"]
+# 懒加载OCR模块
+from . import ocr
+from .ocr import OcrDetector
 
 
 class GroupFilter:
@@ -35,35 +26,10 @@ class GroupFilter:
             ocr_cache_file: OCR结果缓存文件路径
             ocr_model: OCR识别模型名称，默认中文模型
         """
-        self.ocr_cache_file = ocr_cache_file or os.path.join(os.path.dirname(__file__), 'ocr_cache.json')
-        self.ocr_cache = self._load_ocr_cache()
+        # 初始化OCR检测器
+        self.text_detector = OcrDetector(cache_file=ocr_cache_file, default_model=ocr_model)
         self.ocr_model = ocr_model
-        
-        # 检查是否有可用的OCR模型
-        self.available_models = []
-        try:
-            self.available_models = list_rec_models()
-            logger.info(f"可用OCR模型: {self.available_models}")
-        except Exception as e:
-            logger.error(f"获取OCR模型列表失败: {e}")
-    
-    def _load_ocr_cache(self) -> Dict:
-        """加载OCR结果缓存"""
-        try:
-            if os.path.exists(self.ocr_cache_file):
-                with open(self.ocr_cache_file, 'r', encoding='utf-8') as f:
-                    return json.load(f)
-        except Exception as e:
-            logger.error(f"加载OCR缓存文件失败: {e}")
-        return {}
-    
-    def _save_ocr_cache(self):
-        """保存OCR结果缓存"""
-        try:
-            with open(self.ocr_cache_file, 'w', encoding='utf-8') as f:
-                json.dump(self.ocr_cache, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            logger.error(f"保存OCR缓存文件失败: {e}")
+        self.available_models = self.text_detector.available_models
     
     def _get_file_info(self, file_path: str) -> dict:
         """获取文件信息（大小、创建时间、修改时间）"""
@@ -82,39 +48,9 @@ class GroupFilter:
                 'mtime': 0
             }
     
-    def _detect_text_language(self, text: str) -> str:
-        """检测文本语言类型"""
-        # 正则表达式识别中文、日文、英文
-        chinese_pattern = re.compile(r'[\u4e00-\u9fff]')
-        japanese_pattern = re.compile(r'[\u3040-\u30ff\u3400-\u4dbf]')
-        english_pattern = re.compile(r'[a-zA-Z]')
-        
-        # 计算各种语言字符的数量
-        chinese_count = len(chinese_pattern.findall(text))
-        japanese_count = len(japanese_pattern.findall(text))
-        english_count = len(english_pattern.findall(text))
-        
-        # 根据字符数量判断语言类型
-        if chinese_count > japanese_count and chinese_count > english_count:
-            return 'chinese'
-        elif japanese_count > chinese_count and japanese_count > english_count:
-            return 'japanese'
-        elif english_count > chinese_count and english_count > japanese_count:
-            return 'english'
-        elif chinese_count == 0 and japanese_count == 0 and english_count == 0:
-            return 'unknown'
-        else:
-            # 混合语言，返回最多的
-            counts = [
-                ('chinese', chinese_count),
-                ('japanese', japanese_count),
-                ('english', english_count)
-            ]
-            return max(counts, key=lambda x: x[1])[0]
-    
     def _perform_ocr(self, image_path: str, model: str = None) -> List[Tuple]:
         """
-        对图片进行OCR识别
+        对图片进行OCR识别（使用OcrDetector实例）
         
         Args:
             image_path: 图片路径
@@ -123,32 +59,11 @@ class GroupFilter:
         Returns:
             List[Tuple]: OCR识别结果
         """
-        try:
-            # 检查缓存
-            cache_key = f"{image_path}_{model or self.ocr_model}"
-            if cache_key in self.ocr_cache:
-                logger.info(f"使用OCR缓存结果: {os.path.basename(image_path)}")
-                return self.ocr_cache[cache_key]
-            
-            # 打开图片
-            image = Image.open(image_path)
-            
-            # 使用指定的OCR模型
-            ocr_model = model or self.ocr_model
-            results = ocr(image, recognize_model=ocr_model)
-            
-            # 缓存结果
-            self.ocr_cache[cache_key] = results
-            self._save_ocr_cache()
-            
-            return results
-        except Exception as e:
-            logger.error(f"OCR识别失败 {image_path}: {e}")
-            return []
+        return self.text_detector.perform_ocr(image_path, model)
     
     def _get_ocr_text(self, image_path: str, model: str = None) -> str:
         """
-        获取图片OCR识别的文本内容
+        获取图片OCR识别的文本内容（使用OcrDetector实例）
         
         Args:
             image_path: 图片路径
@@ -157,15 +72,11 @@ class GroupFilter:
         Returns:
             str: 合并后的OCR文本
         """
-        results = self._perform_ocr(image_path, model)
-        
-        # 提取所有文本并合并
-        texts = [text for _, text, _ in results]
-        return " ".join(texts)
+        return self.text_detector.get_ocr_text(image_path, model)
     
     def _analyze_image_text(self, image_path: str) -> Dict:
         """
-        分析图片中的文字并返回语言信息
+        分析图片中的文字并返回语言信息（使用OcrDetector实例）
         
         Args:
             image_path: 图片路径
@@ -173,24 +84,19 @@ class GroupFilter:
         Returns:
             Dict: 文字分析结果
         """
-        # 使用中文模型进行初步识别
-        text = self._get_ocr_text(image_path)
+        return self.text_detector.analyze_image_text(image_path)
+    
+    def _analyze_image_text_density(self, image_path: str) -> Dict:
+        """
+        分析图片的文字密度（使用OcrDetector实例）
         
-        # 检测语言
-        lang = self._detect_text_language(text)
-        
-        # 如果初步识别为非中文，尝试使用对应语言的模型再次识别
-        if lang == 'english' and 'en_PP-OCRv4_rec' in self.available_models:
-            text = self._get_ocr_text(image_path, 'en_PP-OCRv4_rec')
-        elif lang == 'japanese' and 'japan_PP-OCRv3_rec' in self.available_models:
-            text = self._get_ocr_text(image_path, 'japan_PP-OCRv3_rec')
-        
-        # 返回分析结果
-        return {
-            'text': text,
-            'language': lang,
-            'text_count': len(text.strip())
-        }
+        Args:
+            image_path: 图片路径
+            
+        Returns:
+            Dict: 文字密度分析结果
+        """
+        return self.text_detector.calculate_text_density(image_path)
     
     def apply_time_filter(self, group: List[str]) -> List[Tuple[str, str]]:
         """
@@ -271,11 +177,16 @@ class GroupFilter:
         
         # 分析每张图片的文字
         text_analyses = {}
+        density_analyses = {}
         for img in group:
             text_analyses[img] = self._analyze_image_text(img)
+            density_analyses[img] = self._analyze_image_text_density(img)
+            
+            # 记录文本分析结果
             logger.info(f"图片OCR分析 [{os.path.basename(img)}]: "
                        f"语言={text_analyses[img]['language']}, "
-                       f"文字数={text_analyses[img]['text_count']}")
+                       f"文字数={text_analyses[img]['text_count']}, "
+                       f"文字密度={density_analyses[img]['text_density']*100:.2f}%")
         
         # 按语言分类
         lang_groups = {
@@ -291,9 +202,11 @@ class GroupFilter:
         
         # 确定要保留的图片，优先级：中文 > 无文字 > 英文 > 日文
         if lang_groups['chinese']:
-            # 如果有中文图片，保留文字最多的中文图片
-            to_keep = max(lang_groups['chinese'], 
-                          key=lambda x: text_analyses[x]['text_count'])
+            # 如果有中文图片，优先考虑文字密度最高的，其次是文字数量最多的
+            chinese_imgs = sorted(lang_groups['chinese'], 
+                                 key=lambda x: (density_analyses[x]['text_density'], text_analyses[x]['text_count']),
+                                 reverse=True)
+            to_keep = chinese_imgs[0]
             keep_lang = 'chinese'
         elif lang_groups['unknown']:
             # 如果没有中文但有无文字图片，保留最大的无文字图片
@@ -301,14 +214,18 @@ class GroupFilter:
                           key=lambda x: self._get_file_info(x)['size'])
             keep_lang = 'unknown'
         elif lang_groups['english']:
-            # 如果没有中文和无文字但有英文，保留文字最多的英文图片
-            to_keep = max(lang_groups['english'], 
-                          key=lambda x: text_analyses[x]['text_count'])
+            # 如果没有中文和无文字但有英文，优先考虑文字密度最高的，其次是文字数量最多的
+            english_imgs = sorted(lang_groups['english'], 
+                                 key=lambda x: (density_analyses[x]['text_density'], text_analyses[x]['text_count']),
+                                 reverse=True)
+            to_keep = english_imgs[0]
             keep_lang = 'english'
         elif lang_groups['japanese']:
-            # 如果只有日文，保留文字最多的日文图片
-            to_keep = max(lang_groups['japanese'], 
-                          key=lambda x: text_analyses[x]['text_count'])
+            # 如果只有日文，优先考虑文字密度最高的，其次是文字数量最多的
+            japanese_imgs = sorted(lang_groups['japanese'], 
+                                  key=lambda x: (density_analyses[x]['text_density'], text_analyses[x]['text_count']),
+                                  reverse=True)
+            to_keep = japanese_imgs[0]
             keep_lang = 'japanese'
         else:
             # 如果没有任何识别结果，保留文件大小最大的
@@ -320,9 +237,14 @@ class GroupFilter:
             if img != to_keep:
                 img_lang = text_analyses[img]['language']
                 if img_lang == keep_lang:
-                    # 同语言，比较文字数量
-                    diff = text_analyses[to_keep]['text_count'] - text_analyses[img]['text_count']
-                    reason = f"同为{img_lang}，但文字少 {diff} 个"
+                    # 同语言，比较文字密度和数量
+                    density_diff = density_analyses[to_keep]['text_density'] - density_analyses[img]['text_density']
+                    text_diff = text_analyses[to_keep]['text_count'] - text_analyses[img]['text_count']
+                    
+                    if density_diff > 0.05:  # 密度差异大于5%
+                        reason = f"同为{img_lang}，但文字密度低 {density_diff*100:.1f}%"
+                    else:
+                        reason = f"同为{img_lang}，但文字少 {text_diff} 个"
                 else:
                     # 不同语言，基于优先级决定
                     reason = f"语言为{img_lang}，优先保留{keep_lang}"
@@ -379,30 +301,97 @@ class GroupFilter:
             
         return to_delete, removal_reasons
     
-    def process_by_ocr(self, group: List[str]) -> Tuple[Set[str], Dict[str, Dict]]:
+    def process_by_ocr(self, group: List[str]) -> List[Tuple[str, str]]:
         """
-        按照OCR策略处理相似图片组
+        应用OCR过滤（基于文字识别），返回要删除的图片和原因
+        优先级：中文 > 无文字 > 英文 > 日文
         
         Args:
             group: 相似图片组
             
         Returns:
-            Tuple[Set[str], Dict[str, Dict]]: (要删除的文件集合, 删除原因字典)
+            List[Tuple[str, str]]: (要删除的图片路径, 删除原因)
         """
-        to_delete = set()
-        removal_reasons = {}
+        to_delete = []
         
-        deleted_files = self.apply_ocr_filter(group)
-        for img, reason in deleted_files:
-            to_delete.add(img)
-            removal_reasons[img] = {
-                'reason': 'ocr',
-                'details': reason
-            }
-            logger.info(f"标记删除OCR较差图片: {os.path.basename(img)}")
+        # 分析每张图片的文字
+        text_analyses = {}
+        density_analyses = {}
+        for img in group:
+            text_analyses[img] = self._analyze_image_text(img)
+            density_analyses[img] = self._analyze_image_text_density(img)
             
-        return to_delete, removal_reasons
-    
+            # 记录文本分析结果
+            logger.info(f"图片OCR分析 [{os.path.basename(img)}]: "
+                       f"语言={text_analyses[img]['language']}, "
+                       f"文字数={text_analyses[img]['text_count']}, "
+                       f"文字密度={density_analyses[img]['text_density']*100:.2f}%")
+        
+        # 按语言分类
+        lang_groups = {
+            'chinese': [],
+            'english': [],
+            'japanese': [],
+            'unknown': []
+        }
+        
+        for img in group:
+            lang = text_analyses[img]['language']
+            lang_groups[lang].append(img)
+        
+        # 确定要保留的图片，优先级：中文 > 无文字 > 英文 > 日文
+        if lang_groups['chinese']:
+            # 如果有中文图片，优先考虑文字密度最高的，其次是文字数量最多的
+            chinese_imgs = sorted(lang_groups['chinese'], 
+                                 key=lambda x: (density_analyses[x]['text_density'], text_analyses[x]['text_count']),
+                                 reverse=True)
+            to_keep = chinese_imgs[0]
+            keep_lang = 'chinese'
+        elif lang_groups['unknown']:
+            # 如果没有中文但有无文字图片，保留最大的无文字图片
+            to_keep = max(lang_groups['unknown'], 
+                          key=lambda x: self._get_file_info(x)['size'])
+            keep_lang = 'unknown'
+        elif lang_groups['english']:
+            # 如果没有中文和无文字但有英文，优先考虑文字密度最高的，其次是文字数量最多的
+            english_imgs = sorted(lang_groups['english'], 
+                                 key=lambda x: (density_analyses[x]['text_density'], text_analyses[x]['text_count']),
+                                 reverse=True)
+            to_keep = english_imgs[0]
+            keep_lang = 'english'
+        elif lang_groups['japanese']:
+            # 如果只有日文，优先考虑文字密度最高的，其次是文字数量最多的
+            japanese_imgs = sorted(lang_groups['japanese'], 
+                                  key=lambda x: (density_analyses[x]['text_density'], text_analyses[x]['text_count']),
+                                  reverse=True)
+            to_keep = japanese_imgs[0]
+            keep_lang = 'japanese'
+        else:
+            # 如果没有任何识别结果，保留文件大小最大的
+            to_keep = max(group, key=lambda x: self._get_file_info(x)['size'])
+            keep_lang = 'unknown'
+        
+        # 删除其他图片
+        for img in group:
+            if img != to_keep:
+                img_lang = text_analyses[img]['language']
+                if img_lang == keep_lang:
+                    # 同语言，比较文字密度和数量
+                    density_diff = density_analyses[to_keep]['text_density'] - density_analyses[img]['text_density']
+                    text_diff = text_analyses[to_keep]['text_count'] - text_analyses[img]['text_count']
+                    
+                    if density_diff > 0.05:  # 密度差异大于5%
+                        reason = f"同为{img_lang}，但文字密度低 {density_diff*100:.1f}%"
+                    else:
+                        reason = f"同为{img_lang}，但文字少 {text_diff} 个"
+                else:
+                    # 不同语言，基于优先级决定
+                    reason = f"语言为{img_lang}，优先保留{keep_lang}"
+                
+                to_delete.append((img, reason))
+        
+        return to_delete
+
     def process_by_ocr_time(self, group: List[str]) -> Tuple[Set[str], Dict[str, Dict]]:
         """
         混合策略处理相似图片组（结合OCR和时间）
@@ -657,13 +646,17 @@ def test_group_filter_ocr(test_dir: str = None):
     for group in similar_groups:
         logger.info(f"\n处理相似图片组，共 {len(group)} 张图片")
         
-        # 分析每张图片的OCR结果
+        # 分析每张图片的OCR结果和文字密度
         for img in group:
             analysis = filter._analyze_image_text(img)
+            density = filter._analyze_image_text_density(img)
+            
             logger.info(f"图片 [{os.path.basename(img)}] OCR分析结果:")
             logger.info(f"  语言: {analysis['language']}")
             logger.info(f"  文字数量: {analysis['text_count']}")
             logger.info(f"  文字内容: {analysis['text'][:100]}..." if len(analysis['text']) > 100 else analysis['text'])
+            logger.info(f"  文字密度: {density['text_density']*100:.2f}%")
+            logger.info(f"  字符密度: {density['char_density']:.2f} 字符/千像素")
         
         # 测试不同过滤策略
         for mode_name, filter_func in filter_modes:
