@@ -91,7 +91,7 @@ class HashCache:
         if cls._sqlite_db is None and MULTIPROCESS_CONFIG.get('use_sqlite', True):
             try:
                 cls._sqlite_db = get_db_cached()
-                logger.info("SQLite数据库已初始化")
+                # logger.info("SQLite数据库已初始化")
             except Exception as e:
                 logger.error(f"初始化SQLite数据库失败: {e}")
         return cls._sqlite_db
@@ -170,7 +170,7 @@ class HashCache:
                     cls._cache = new_cache  # 直接替换引用保证原子性
                     cls._initialized = True
                     cls._last_refresh = time.time()
-                    logger.debug(f"哈希缓存已更新，共 {len(cls._cache)} 个条目，来源: {loaded_files}")
+                    # logger.debug(f"哈希缓存已更新，共 {len(cls._cache)} 个条目，来源: {loaded_files}")
                 else:
                     logger.warning("没有成功加载任何哈希文件")
                     if not cls._initialized:

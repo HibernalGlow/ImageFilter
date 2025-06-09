@@ -39,6 +39,14 @@ import sys
 from pathlib import Path
 from datetime import datetime
 
+# 进程初始化函数，确保每个子进程都有正确的日志配置
+def init_worker_process():
+    """为每个工作进程初始化日志配置"""
+    global logger
+    # 获取当前模块的路径作为project_root
+    module_path = Path(__file__).parent.resolve()
+    logger, _ = setup_logger(app_name="no_translate_find", project_root=module_path, console_output=False)
+
 def setup_logger(app_name="app", project_root=None, console_output=True):
     """配置 Loguru 日志系统
     
@@ -76,7 +84,10 @@ def setup_logger(app_name="app", project_root=None, console_output=True):
     # 构建日志目录和文件路径
     log_dir = os.path.join(project_root, "logs", app_name, date_str, hour_str)
     os.makedirs(log_dir, exist_ok=True)
-    log_file = os.path.join(log_dir, f"{minute_str}.log")
+    
+    # 添加进程ID以确保唯一性
+    process_id = os.getpid()
+    log_file = os.path.join(log_dir, f"{minute_str}_{process_id}.log")
     
     # 添加文件处理器
     logger.add(
@@ -725,8 +736,15 @@ def process_file_with_count(file_path: str) -> Tuple[str, str, Dict[str, Union[i
     
     return file_path, new_path, metrics
 
-def process_file_group(group_files: List[str], base_dir: str, trash_dir: str, report_generator: ReportGenerator, create_shortcuts: bool = False, enable_multi_main: bool = False) -> None:
-    """处理一组相似文件"""
+def process_file_group(group_files: List[str], base_dir: str, trash_dir: str, create_shortcuts: bool = False, enable_multi_main: bool = False) -> Dict:
+    """处理一组相似文件，返回处理结果统计"""
+    # 处理结果统计
+    result_stats = {
+        'moved_to_trash': 0,
+        'moved_to_multi': 0,
+        'created_shortcuts': 0
+    }
+    
     # 获取组的基础名称
     group_base_name, _ = clean_filename(group_files[0])
     
@@ -737,7 +755,7 @@ def process_file_group(group_files: List[str], base_dir: str, trash_dir: str, re
     filtered_files = [f for f in group_files if not is_in_blacklist(f)]
     if not filtered_files:
         logger.info("[#group_info] ⏭️ 组[%s]跳过: 所有文件都在黑名单中", group_base_name)
-        return
+        return result_stats
         
     # 分离汉化版本和其他版本，并使用完整路径
     chinese_versions = []
@@ -859,7 +877,7 @@ def process_file_group(group_files: List[str], base_dir: str, trash_dir: str, re
                 dst_path = os.path.join(multi_dir, rel_path)
                 if safe_move_file(src_path, dst_path):
                     logger.info("[#file_ops] ✅ 已移动到multi: %s", file)
-                    report_generator.update_stats('moved_to_multi')
+                    result_stats['moved_to_multi'] += 1
             
             # 移动其他非原版到trash
             for other_file in other_versions:
@@ -870,11 +888,11 @@ def process_file_group(group_files: List[str], base_dir: str, trash_dir: str, re
                     shortcut_path = os.path.splitext(dst_path)[0]
                     if create_shortcut(src_path, shortcut_path):
                         logger.info("[#file_ops] ✅ 已创建快捷方式: %s", other_file)
-                        report_generator.update_stats('created_shortcuts')
+                        result_stats['created_shortcuts'] += 1
                 else:
                     if safe_move_file(src_path, dst_path):
                         logger.info("[#file_ops] ✅ 已移动到trash: %s", other_file)
-                        report_generator.update_stats('moved_to_trash')
+                        result_stats['moved_to_trash'] += 1
         else:
             # 只有一个需要保留的版本
             logger.info("[#group_info] 🔍 组[%s]处理: 发现1个需要保留的版本，保持原位置", group_base_name)
@@ -887,11 +905,11 @@ def process_file_group(group_files: List[str], base_dir: str, trash_dir: str, re
                     shortcut_path = os.path.splitext(dst_path)[0]
                     if create_shortcut(src_path, shortcut_path):
                         logger.info("[#file_ops] ✅ 已创建快捷方式: %s", other_file)
-                        report_generator.update_stats('created_shortcuts')
+                        result_stats['created_shortcuts'] += 1
                 else:
                     if safe_move_file(src_path, dst_path):
                         logger.info("[#file_ops] ✅ 已移动到trash: %s", other_file)
-                        report_generator.update_stats('moved_to_trash')
+                        result_stats['moved_to_trash'] += 1
     else:
         # 没有汉化版本的情况
         if len(other_versions) > 1:
@@ -913,11 +931,13 @@ def process_file_group(group_files: List[str], base_dir: str, trash_dir: str, re
                 dst_path = os.path.join(multi_dir, rel_path)
                 if safe_move_file(src_path, dst_path):
                     logger.info("[#file_ops] ✅ 已移动到multi: %s", file)
-                    report_generator.update_stats('moved_to_multi')
+                    result_stats['moved_to_multi'] += 1
             logger.info("[#group_info] 🔍 组[%s]处理: 未发现汉化版本，发现%d个原版，已移动到multi", group_base_name, len(other_versions))
         else:
             # 单个原版，保持原位置
-            logger.info("[#group_info] 🔍 组[%s]处理: 未发现汉化版本，仅有1个原版，保持原位置")
+            logger.info("[#group_info] 🔍 组[%s]处理: 未发现汉化版本，仅有1个原版，保持原位置", group_base_name)
+    
+    return result_stats
 
 def process_directory(directory: str, report_generator: ReportGenerator, dry_run: bool = False, create_shortcuts: bool = False, enable_multi_main: bool = False) -> None:
     """处理单个目录"""
@@ -962,24 +982,35 @@ def process_directory(directory: str, report_generator: ReportGenerator, dry_run
     logger.info("[#process] 🔄 开始处理文件组...")
 
     with ProcessPoolExecutor(max_workers=min(os.cpu_count() * 2, 8)) as executor:
-        futures = []
-        for _, group_files in groups.items():
+        futures = {}  # 使用字典跟踪每个future对应的组
+        for group_base_name, group_files in groups.items():
             if len(group_files) > 1:
                 future = executor.submit(
                     process_file_group,
                     group_files,
                     directory,
                     trash_dir,
-                    report_generator,
                     create_shortcuts,
                     enable_multi_main
                 )
-                futures.append(future)
+                futures[future] = group_base_name
+        
         completed = 0
-        for _ in as_completed(futures):
+        for future in as_completed(futures.keys()):
             completed += 1
             future_count = len(futures)
             scan_percent = completed / future_count * 100
+            
+            # 获取处理结果并更新报告
+            try:
+                result_stats = future.result()
+                # 更新统计信息
+                for key, value in result_stats.items():
+                    if value > 0:
+                        report_generator.update_stats(key, value)
+            except Exception as e:
+                logger.error("[#error_log] ❌ 处理组时出错: %s, 错误: %s", futures[future], str(e))
+                
             logger.info("[@stats] 组进度: (%d/%d) %.2f%%", completed, future_count, scan_percent)
 
 def get_paths_from_clipboard():
@@ -1144,7 +1175,6 @@ def run_application(args):
                 break
             except KeyboardInterrupt:
                 print("用户取消输入")
-                return False
         
     if not paths:
         logger.info("[#error_log] ❌ 未提供任何路径")

@@ -8,7 +8,7 @@ import imagehash
 from rich.progress import Progress, TextColumn, BarColumn, TimeElapsedColumn, TimeRemainingColumn, SpinnerColumn
 from rich.console import Console
 from rich.table import Table
-
+from rich.prompt  import Prompt
 # 创建控制台
 console = Console()
 
@@ -259,7 +259,18 @@ def generate_html_report(results, image_files, output_path="phash_benchmark_repo
     console.print(table)
 
 if __name__ == "__main__":
-    folder = r"E:\2EHV\test"  # 替换为你的图片文件夹路径
-    results, image_files = benchmark_phash_sizes(folder, hash_sizes=(10, 12, 16))
+    
+    
+    # 交互式输入路径
+    folder = Prompt.ask("请输入图片文件夹路径", default="E:\\2EHV\\test")
+    
+    # 交互式选择哈希尺寸
+    hash_sizes_input = Prompt.ask("请输入要测试的哈希尺寸（用逗号分隔）", default="10,12,16")
+    hash_sizes = tuple(int(x.strip()) for x in hash_sizes_input.split(','))
+    
+    console.print(f"[bold]将测试以下哈希尺寸: [cyan]{hash_sizes}[/cyan][/bold]")
+    console.print(f"[bold]目标文件夹: [cyan]{folder}[/cyan][/bold]")
+    
+    results, image_files = benchmark_phash_sizes(folder, hash_sizes=hash_sizes)
     output_path = Path(folder) / "phash_benchmark_report.html"
     generate_html_report(results, image_files, output_path=output_path)
