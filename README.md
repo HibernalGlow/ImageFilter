@@ -128,3 +128,137 @@ python visualize_results.py --input phash_analysis.json --output charts
    ```
 
 4. 重复步骤2-3，直到找到最适合您应用场景的参数配置
+
+# 图片宽度/高度过滤工具
+
+一个用于按照图片尺寸筛选和分类图片的工具。
+
+## 功能特点
+
+- 支持按照图片宽度和高度进行筛选
+- 支持多种尺寸规则配置
+- 可以将图片分类到不同的文件夹
+- 支持复制或移动操作
+- 支持通过预设配置快速切换不同筛选方案
+
+## 预设配置文件
+
+预设配置文件 `presets.json` 位于程序同目录下，可以直接编辑这个文件来自定义筛选规则。
+
+### 预设配置格式
+
+```json
+{
+    "预设名称": {
+        "description": "预设描述",
+        "source_dir": "源目录路径",
+        "target_dir": "目标目录路径",
+        "dimension_rules": [
+            {
+                "min_width": 最小宽度,
+                "max_width": 最大宽度 (-1 表示不限),
+                "min_height": 最小高度 (-1 表示不限),
+                "max_height": 最大高度 (-1 表示不限),
+                "mode": "匹配模式 (and 或 or)",
+                "folder": "目标子文件夹"
+            },
+            // 更多规则...
+        ],
+        "cut_mode": false, // false 为复制，true 为移动
+        "max_workers": 16, // 并行处理线程数
+        "threshold_count": 3 // 匹配阈值
+    }
+}
+```
+
+### 规则优先级
+
+**重要说明**: 尺寸规则按照在配置中的顺序从上到下依次检查，优先级从高到低。一旦图片匹配到一个规则，就不会再检查后续规则。
+
+例如，如果有两个规则：
+1. 规则1: 宽度 0-900px
+2. 规则2: 宽度 901-1800px
+
+那么一张宽度为 800px 的图片只会匹配规则1，而不会再检查规则2。
+
+### 匹配模式说明
+
+- `"mode": "and"`: 图片的宽度和高度都必须满足条件才算匹配
+- `"mode": "or"`: 图片的宽度或高度满足条件之一即算匹配
+
+### 预设配置示例
+
+```json
+{
+    "默认": {
+        "description": "默认配置 - 大于等于1800像素宽度",
+        "source_dir": "E:\\999EHV",
+        "target_dir": "E:\\7EHV",
+        "dimension_rules": [
+            {
+                "min_width": 1800,
+                "max_width": -1,
+                "min_height": -1,
+                "max_height": -1,
+                "mode": "or",
+                "folder": ""
+            }
+        ],
+        "cut_mode": false,
+        "max_workers": 16,
+        "threshold_count": 3
+    },
+    "双重分组": {
+        "description": "双重分组 - 按不同宽度范围分组",
+        "source_dir": "E:\\999EHV",
+        "target_dir": "E:\\7EHV",
+        "dimension_rules": [
+            {
+                "min_width": 0,
+                "max_width": 900,
+                "min_height": -1,
+                "max_height": -1,
+                "mode": "or",
+                "folder": "900px"
+            },
+            {
+                "min_width": 901,
+                "max_width": 1800,
+                "min_height": -1,
+                "max_height": -1,
+                "mode": "or",
+                "folder": "1800px"
+            }
+        ],
+        "cut_mode": false,
+        "max_workers": 16,
+        "threshold_count": 3
+    }
+}
+```
+
+## 使用方法
+
+### 交互式使用
+
+1. 运行程序 `python -m src.widthfilter -i`
+2. 选择一个预设配置
+3. 程序将按照选择的预设配置处理图片
+
+### 命令行参数
+
+```
+python -m src.widthfilter [选项]
+
+选项:
+  -c, --clipboard      从剪贴板读取源目录路径
+  -s, --source SOURCE  源目录路径
+  -t, --target TARGET  目标目录路径
+  -w, --width WIDTH    宽度阈值
+  -l, --larger         选择大于等于指定宽度的文件
+  -m, --move           移动文件而不是复制
+  -j, --jobs JOBS      并行处理线程数
+  -n, --number NUMBER  符合条件的图片数量阈值
+  -i, --interactive    启用交互式选择预设
+  -v, --version        显示版本信息
+```

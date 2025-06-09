@@ -9,7 +9,7 @@ from typing import Dict, Any, Optional, List
 from rich.console import Console
 from loguru import logger
 
-from .config import load_presets, manage_presets, DEFAULT_PRESETS
+from .config import load_presets, select_preset
 from .logger_setup import setup_logger, init_textual_logger
 from .__init__ import __version__
 
@@ -55,48 +55,19 @@ def parse_command_line() -> Dict[str, Any]:
         # 加载预设
         presets = load_presets()
         
-        # 管理预设
-        selected_preset = manage_presets(presets)
+        # 直接选择预设，跳过管理选项
+        preset_name, preset = select_preset(presets)
         
-        # 如果选择了预设，使用预设配置
-        if selected_preset:
-            config = selected_preset.copy()
-            
-            # 检查是否从剪贴板读取
-            if args.clipboard:
-                config["source_dir"] = pyperclip.paste().strip()
-        else:
-            # 否则使用命令行参数
-            source_dir = pyperclip.paste().strip() if args.clipboard else args.source
-            
-            # 构建尺寸规则
-            if args.larger:
-                dimension_rules = [{
-                    "min_width": args.width, 
-                    "max_width": -1, 
-                    "min_height": -1, 
-                    "max_height": -1, 
-                    "mode": "or", 
-                    "folder": ""
-                }]
-            else:
-                dimension_rules = [{
-                    "min_width": 0, 
-                    "max_width": args.width - 1, 
-                    "min_height": -1, 
-                    "max_height": -1, 
-                    "mode": "or", 
-                    "folder": ""
-                }]
-                
-            config = {
-                "source_dir": source_dir,
-                "target_dir": args.target,
-                "dimension_rules": dimension_rules,
-                "cut_mode": args.move,
-                "max_workers": args.jobs,
-                "threshold_count": args.number
-            }
+        # 移除与图像处理无关的字段，如description
+        process_config = preset.copy()
+        if 'description' in process_config:
+            del process_config['description']
+        
+        config = process_config
+        
+        # 检查是否从剪贴板读取
+        if args.clipboard:
+            config["source_dir"] = pyperclip.paste().strip()
     else:
         # 使用命令行参数
         source_dir = pyperclip.paste().strip() if args.clipboard else args.source
@@ -159,7 +130,7 @@ def run():
     logger_instance, config_info = setup_logger(app_name="width_filter", console_output=False)
     
     # 初始化Textual日志
-    # init_textual_logger(config_info)
+    init_textual_logger(config_info)
     
     try:
         logger.info(f"[#current_stats]开始处理 - 源: {config['source_dir']} 目标: {config['target_dir']}")
@@ -175,4 +146,4 @@ def run():
         console.print(f"[bold red]处理过程中出错: {e}")
 
 if __name__ == "__main__":
-    run() 
+    run()

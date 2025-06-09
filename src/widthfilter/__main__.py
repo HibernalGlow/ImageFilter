@@ -10,7 +10,7 @@ Image.MAX_IMAGE_PIXELS = None
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 # 导入CLI模块
-from .cli import run
+from widthfilter.cli import run
 
 def main():
     """主入口函数"""

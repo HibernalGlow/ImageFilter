@@ -211,8 +211,13 @@ class ImageProcessor:
                         widths.append(width)
                         heights.append(height)
                         
-                        # 检查每个尺寸规则
+                        # 检查每个尺寸规则 - 规则按优先级从高到低排列
+                        matched_rule = False
                         for i, rule in enumerate(self.dimension_rules):
+                            # 如果已经匹配到一个规则，不再检查后续规则
+                            if matched_rule:
+                                break
+                                
                             # 获取规则参数
                             min_width = rule["min_width"]
                             max_width = rule["max_width"]
@@ -240,6 +245,7 @@ class ImageProcessor:
                                 
                             if matches_rule:
                                 rule_matches[i] += 1
+                                matched_rule = True  # 标记已经匹配到规则
                                 self.logger.debug(f"[#process_log]图片 {img} 符合规则 {i+1}: {width}x{height}px")
                 
                 # 没有有效的图像尺寸

@@ -9,7 +9,7 @@
                 "max_width": -1,
                 "min_height": -1,
                 "max_height": -1,
-                "mode": "or",
+                "mode": "and",
                 "folder": ""
             }
         ],
@@ -27,7 +27,7 @@
                 "max_width": 900,
                 "min_height": -1,
                 "max_height": -1,
-                "mode": "or",
+                "mode": "and",
                 "folder": "900px"
             },
             {
@@ -35,7 +35,7 @@
                 "max_width": 1800,
                 "min_height": -1,
                 "max_height": -1,
-                "mode": "or",
+                "mode": "and",
                 "folder": "1800px"
             }
         ],
