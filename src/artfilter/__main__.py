@@ -10,7 +10,7 @@ import logging
 from datetime import datetime
 # 添加TextualLogger导入
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from textual_logger import TextualLoggerManager
 from hashu.utils.hash_process_config import  process_artist_folder, process_duplicates
 from loguru import logger
@@ -18,6 +18,21 @@ import os
 import sys
 from pathlib import Path
 from datetime import datetime
+
+def parse_args():
+    """解析命令行参数
+    
+    Returns:
+        argparse.Namespace: 解析后的参数
+    """
+    parser = argparse.ArgumentParser(description='图片过滤工具')
+    parser.add_argument('--config', '-c', type=str, help='配置文件路径')
+    parser.add_argument('--workers', '-w', type=int, help='线程数')
+    parser.add_argument('--force-update', '-f', action='store_true', help='强制更新哈希值')
+    parser.add_argument('--ref-hamming-distance', type=int, help='与外部参考文件比较的汉明距离阈值')
+    parser.add_argument('--hash-size', type=int, help='哈希值大小')
+    parser.add_argument('--filter-white', action='store_true', help='启用白图过滤')
+    return parser.parse_args()
 
 def setup_logger(app_name="app", project_root=None, console_output=True):
     """配置 Loguru 日志系统
@@ -80,40 +95,67 @@ def setup_logger(app_name="app", project_root=None, console_output=True):
 logger, config_info = setup_logger(app_name="artfilter", console_output=True)
 
 
-# 参数配置
-DEFAULT_PARAMS = {
-    'ref_hamming_distance': 16,  # 与外部参考文件比较的汉明距离阈值
-    'hash_size': 10,  # 哈希值大小
-    'filter_white_enabled': False,  # 是否启用白图过滤
-}
+# 加载配置文件
+def load_config(config_path=None):
+    """从配置文件加载配置
+    
+    Args:
+        config_path: 配置文件路径，如果为None则使用默认路径
+        
+    Returns:
+        dict: 配置字典
+    """
+    # 如果未指定配置文件路径，则使用默认路径
+    if config_path is None:
+        config_path = Path(__file__).parent / "config.json"
+    else:
+        config_path = Path(config_path)
+        
+    try:
+        if config_path.exists():
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+            logger.info(f"✅ 已加载配置文件: {config_path}")
+            return config
+        else:
+            logger.warning(f"⚠️ 配置文件不存在: {config_path}，将使用默认配置")
+            return None
+    except Exception as e:
+        logger.error(f"❌ 加载配置文件时出错: {e}，将使用默认配置")
+        return None
+        
 
-# TextualLogger布局配置
-TEXTUAL_LAYOUT = {
-    "current_stats": {
-        "ratio": 2,
-        "title": "📊 总体进度",
-        "style": "lightyellow"
-    },
-    "current_progress": {
-        "ratio": 2,
-        "title": "🔄 当前进度",
-        "style": "lightcyan"
-    },
-    "process_log": {
-        "ratio": 3,
-        "title": "📝 处理日志",
-        "style": "lightpink"
-    },
-    "update_log": {
-        "ratio": 3,
-        "title": "ℹ️ 更新日志",
-        "style": "lightblue"
-    },
-}
+# 解析命令行参数
+args = parse_args()
 
-# 常量设置
-WORKER_COUNT = 2  # 线程数
-FORCE_UPDATE = False  # 是否强制更新哈希值
+# 加载配置
+CONFIG = load_config(args.config)
+
+# 使用命令行参数覆盖配置文件中的设置
+if args.workers is not None:
+    CONFIG["worker_count"] = args.workers
+    logger.info(f"✅ 使用命令行参数设置线程数: {args.workers}")
+    
+if args.force_update:
+    CONFIG["force_update"] = True
+    logger.info(f"✅ 使用命令行参数设置强制更新: {CONFIG['force_update']}")
+    
+if args.ref_hamming_distance is not None:
+    CONFIG["default_params"]["ref_hamming_distance"] = args.ref_hamming_distance
+    logger.info(f"✅ 使用命令行参数设置汉明距离阈值: {args.ref_hamming_distance}")
+    
+if args.hash_size is not None:
+    CONFIG["default_params"]["hash_size"] = args.hash_size
+    logger.info(f"✅ 使用命令行参数设置哈希值大小: {args.hash_size}")
+    
+if args.filter_white:
+    CONFIG["default_params"]["filter_white_enabled"] = True
+    logger.info(f"✅ 使用命令行参数启用白图过滤")
+
+DEFAULT_PARAMS = CONFIG["default_params"]
+TEXTUAL_LAYOUT = CONFIG["textual_layout"]
+WORKER_COUNT = CONFIG["worker_count"]
+FORCE_UPDATE = CONFIG["force_update"]
 
 def init_TextualLogger():
     TextualLoggerManager.set_layout(TEXTUAL_LAYOUT, config_info['log_file'])
