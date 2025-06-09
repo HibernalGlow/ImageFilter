@@ -1,12 +1,12 @@
 {
     "默认": {
-        "description": "默认配置 - 大于等于1800像素宽度",
+        "description": "默认配置 - 小于等于1800像素宽度",
         "source_dir": "E:\\999EHV",
         "target_dir": "E:\\7EHV",
         "dimension_rules": [
             {
-                "min_width": 1800,
-                "max_width": -1,
+                "min_width": 0,
+                "max_width": 1800,
                 "min_height": -1,
                 "max_height": -1,
                 "mode": "and",

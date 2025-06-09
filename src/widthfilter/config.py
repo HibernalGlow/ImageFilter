@@ -16,16 +16,16 @@ DEFAULT_CONFIG_PATH = Path(__file__).parent / "presets.json"
 # 默认预设
 DEFAULT_PRESETS = {
     "默认": {
-        "description": "默认配置 - 大于等于1800像素宽度",
-        "source_dir": r"E:\999EHV",
-        "target_dir": r"E:\7EHV",
+        "description": "默认配置 - 小于等于1800像素宽度",
+        "source_dir": "E:\\999EHV",
+        "target_dir": "E:\\7EHV",
         "dimension_rules": [
             {
-                "min_width": 1800,
-                "max_width": -1,
+                "min_width": 0,
+                "max_width": 1800,
                 "min_height": -1,
                 "max_height": -1,
-                "mode": "or",
+                "mode": "and",
                 "folder": ""
             }
         ],
@@ -33,42 +33,26 @@ DEFAULT_PRESETS = {
         "max_workers": 16,
         "threshold_count": 3
     },
-    "高清分组": {
-        "description": "高清分组 - 按不同宽度范围分组",
-        "source_dir": r"E:\999EHV",
-        "target_dir": r"E:\Classified",
+    "双重分组": {
+        "description": "双重分组 - 按不同宽度范围分组",
+        "source_dir": "E:\\999EHV",
+        "target_dir": "E:\\7EHV",
         "dimension_rules": [
             {
                 "min_width": 0,
                 "max_width": 900,
                 "min_height": -1,
                 "max_height": -1,
-                "mode": "or",
-                "folder": "小图"
+                "mode": "and",
+                "folder": "900px"
             },
             {
                 "min_width": 901,
                 "max_width": 1800,
                 "min_height": -1,
                 "max_height": -1,
-                "mode": "or",
-                "folder": "中等"
-            },
-            {
-                "min_width": 1801,
-                "max_width": 2500,
-                "min_height": -1,
-                "max_height": -1,
-                "mode": "or",
-                "folder": "高清"
-            },
-            {
-                "min_width": 2501,
-                "max_width": -1,
-                "min_height": -1,
-                "max_height": -1,
-                "mode": "or",
-                "folder": "超清"
+                "mode": "and",
+                "folder": "1800px"
             }
         ],
         "cut_mode": False,
@@ -77,8 +61,8 @@ DEFAULT_PRESETS = {
     },
     "宽高双重匹配": {
         "description": "宽高双重匹配 - 同时考虑宽度和高度",
-        "source_dir": r"E:\999EHV",
-        "target_dir": r"E:\Dimension",
+        "source_dir": "E:\\999EHV",
+        "target_dir": "E:\\Dimension",
         "dimension_rules": [
             {
                 "min_width": 0,
@@ -109,7 +93,7 @@ DEFAULT_PRESETS = {
         "max_workers": 16,
         "threshold_count": 3
     }
-}
+} 
 
 def load_presets() -> Dict[str, Any]:
     """加载预设配置"""
