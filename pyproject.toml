@@ -41,7 +41,7 @@ dependencies = [
     "PresetUI @ git+https://github.com/HibernalGlow/PresetUI.git",
     "dghs-imgutils",
     "imagehash",
-    "regex",
+    "regex", 
     "orjson>=3.10.18",
     "pywin32>=310",
     "opencc-python-reimplemented",

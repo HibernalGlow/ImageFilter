@@ -20,8 +20,8 @@ from loguru import logger
 from datetime import datetime
 
 # 导入从 lpips.py 和 cluster.py 移动的函数
-from imgfilter.detectors.duplicate.lpips import calculate_lpips_worker, find_similar_images_by_lpips_legacy, cudain
-from imgfilter.detectors.duplicate.cluster import lpips_clustering_cpu, lpips_clustering_gpu
+from imgfilter.detectors.dup.lpips import calculate_lpips_worker, find_similar_images_by_lpips_legacy, cudain
+from imgfilter.detectors.dup.cluster import lpips_clustering_cpu, lpips_clustering_gpu
 
 # 设置基础环境变量
 os.environ["HF_DATASETS_OFFLINE"] = "1"  

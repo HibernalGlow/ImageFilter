@@ -182,15 +182,15 @@ def log_system_info(use_gpu_mode):
     logger.info(f"LPIPS_USE_GPU: {os.environ.get('LPIPS_USE_GPU', '未设置')}")
     
     # 尝试获取GPU信息
-    if use_gpu_mode:
-        try:
-            import torch
-            logger.info(f"PyTorch版本: {torch.__version__}")
-            logger.info(f"CUDA可用: {torch.cuda.is_available()}")
-            if torch.cuda.is_available() and use_gpu_mode:
-                logger.info(f"GPU设备: {torch.cuda.get_device_name(0)}")
-        except ImportError:
-            logger.warning("PyTorch未安装，无法获取GPU信息")
+    # if use_gpu_mode:
+    #     try:
+    #         import torch
+    #         logger.info(f"PyTorch版本: {torch.__version__}")
+    #         logger.info(f"CUDA可用: {torch.cuda.is_available()}")
+    #         if torch.cuda.is_available() and use_gpu_mode:
+    #             logger.info(f"GPU设备: {torch.cuda.get_device_name(0)}")
+    #     except ImportError:
+    #         logger.warning("PyTorch未安装，无法获取GPU信息")
     
     try:
         import onnxruntime as ort
