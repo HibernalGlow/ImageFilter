@@ -11,8 +11,8 @@ from loguru import logger
 from pathlib import Path
 
 # 懒加载OCR模块
-from . import ocr
-from .ocr import OcrDetector
+from .. import ocr
+from ..ocr import OcrDetector
 
 
 class GroupFilter:

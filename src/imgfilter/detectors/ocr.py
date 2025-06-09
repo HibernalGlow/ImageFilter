@@ -94,7 +94,7 @@ class OcrDetector:
             cache_file: OCR结果缓存文件路径
             default_model: 默认OCR识别模型
         """
-        self.cache_file = cache_file or os.path.join(os.path.dirname(__file__), 'ocr_cache.json')
+        self.cache_file = cache_file or os.path.join(os.path.dirname(__file__), 'ocr_detector_cache.json')
         self.cache = self._load_cache()
         self.default_model = default_model
         
