@@ -262,3 +262,59 @@ python -m src.widthfilter [选项]
   -i, --interactive    启用交互式选择预设
   -v, --version        显示版本信息
 ```
+
+# 图像过滤器代码重构
+
+## 重构内容
+
+1. 提取重复的工具函数到 `src/imgfilter/detectors/utils.py`
+   - 哈希计算相关函数
+   - 图像数据获取函数
+   - 哈希比较函数
+   - 基于哈希的图像分组函数
+
+2. 添加两阶段相似图片检测算法
+   - 第一阶段：使用哈希(汉明距离)进行预分组
+   - 第二阶段：对每个预分组内的图片进行LPIPS聚类
+
+## 两阶段相似图片检测算法原理
+
+### 问题背景
+
+图像相似度比较中，LPIPS（Learned Perceptual Image Patch Similarity）提供了较高的感知准确度，但计算成本高昂。如果对所有图片两两进行LPIPS比较，时间复杂度为O(n²)，随着图片数量增加会变得非常慢。
+
+### 解决方案
+
+我们采用两阶段检测策略：
+
+1. **第一阶段：快速哈希预分组**
+   - 计算所有图片的感知哈希(pHash)
+   - 使用汉明距离作为哈希相似度指标
+   - 将汉明距离低于阈值的图片分到同一组
+   - 时间复杂度近似O(n)，非常快速
+
+2. **第二阶段：组内LPIPS聚类**
+   - 只在每个哈希预分组内进行LPIPS聚类
+   - 大大减少LPIPS计算次数
+   - 保持最终聚类质量，同时显著提高性能
+
+### 性能优势
+
+假设有1000张图片，传统方法需要计算近50万次LPIPS距离。使用两阶段策略，如果平均每组有10张图片，则只需计算大约1万次LPIPS距离，性能提升约50倍。
+
+### 使用方法
+
+```python
+# 使用默认参数的两阶段相似图片检测
+detector = DuplicateImageDetector(
+    hamming_threshold=12,  # 哈希预分组的汉明距离阈值
+    lpips_threshold=0.02,  # LPIPS聚类的距离阈值
+    use_gpu=True          # 是否使用GPU加速LPIPS计算
+)
+
+# 检测重复图片
+duplicates, reasons = detector.detect_duplicates(
+    image_files=image_list,
+    mode='lpips'  # 使用LPIPS模式
+)
+```

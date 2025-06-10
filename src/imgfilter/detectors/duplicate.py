@@ -23,6 +23,16 @@ from datetime import datetime
 from imgfilter.detectors.dup.lpips import calculate_lpips_worker, find_similar_images_by_lpips_legacy, cudain
 from imgfilter.detectors.dup.cluster import lpips_clustering_cpu, lpips_clustering_gpu
 
+# 导入从duplicate.py提取到utils.py的函数
+from imgfilter.detectors.utils import (
+    calculate_hash_worker, 
+    get_image_hash_static, 
+    get_image_data,
+    group_images_by_hash,
+    compare_hash_with_reference,
+    find_similar_images_by_phash_lpips_cluster
+)
+
 # 设置基础环境变量
 os.environ["HF_DATASETS_OFFLINE"] = "1"  
 os.environ["TRANSFORMERS_OFFLINE"] = "1"
@@ -328,8 +338,16 @@ class DuplicateImageDetector:
                         lpips_max_workers=self.lpips_max_workers
                     )
                 else:
-                    logger.info(f"使用聚类方法进行LPIPS相似图片检测（更高效），阈值: {current_lpips_threshold}")
-                    similar_groups = self._find_similar_images_by_lpips_cluster(image_files, current_use_gpu, current_lpips_threshold)
+                    logger.info(f"使用两阶段哈希+LPIPS聚类方法进行相似图片检测，阈值: {current_lpips_threshold}")
+                    # 使用两阶段方法
+                    similar_groups = self._find_similar_images_by_phash_lpips_cluster(
+                        image_files, 
+                        archive_path, 
+                        temp_dir, 
+                        image_archive_map, 
+                        current_use_gpu, 
+                        current_lpips_threshold
+                    )
             else:
                 # 其他模式使用哈希方法查找相似图片组
                 similar_groups = self._find_similar_images(image_files, archive_path, temp_dir, image_archive_map)
@@ -427,7 +445,7 @@ class DuplicateImageDetector:
     def _calculate_hash_for_single_image(self, img: str, archive_path: str = None, temp_dir: str = None, 
                                      image_archive_map: Dict[str, Union[str, Dict]] = None) -> Tuple[str, Tuple[str, str]]:
         """
-        为单张图片计算哈希值(线程工作函数)
+        为单张图片计算哈希值(类方法版本)
         
         Args:
             img: 图片文件路径
@@ -510,7 +528,7 @@ class DuplicateImageDetector:
             # 提交所有任务
             future_to_img = {
                 executor.submit(
-                    _calculate_hash_worker,  # 使用全局函数
+                    calculate_hash_worker,  # 使用从utils导入的函数
                     img, 
                     archive_path, 
                     temp_dir, 
@@ -592,7 +610,7 @@ class DuplicateImageDetector:
                 return uri, cached_hash
 
             # 获取预加载的图片数据或直接读取
-            img_data = self._get_image_data(image_path)
+            img_data = get_image_data(image_path, self.mmap_cache)
             if not img_data:
                 logger.error(f"[#hash_calc]获取图片数据失败: {image_path}")
                 return None
@@ -643,44 +661,18 @@ class DuplicateImageDetector:
     def _find_similar_images(self, images: List[str], archive_path: str = None, temp_dir: str = None, 
                             image_archive_map: Dict[str, Union[str, Dict]] = None) -> List[List[str]]:
         """查找相似的图片组"""
-        similar_groups = []
-        processed = set()
-        
-        # 计算所有图片的哈希值
-        image_hashes = self._calculate_hashes_for_images(images, archive_path, temp_dir, image_archive_map)
-        
-        # 提取哈希值用于比较
-        hash_values = {img: hash_val for img, (uri, hash_val) in image_hashes.items()}
-        
-        # 使用加速器进行批量比较
-        target_hashes = list(hash_values.values())
-        img_by_hash = {hash_val: img for img, hash_val in hash_values.items()}
-        
-        # 批量查找相似哈希
-        similar_results = HashAccelerator.batch_find_similar_hashes(
-            target_hashes,
-            target_hashes,
-            img_by_hash,
-            self.hamming_threshold
+        # 使用utils.py中的group_images_by_hash函数替代
+        groups = group_images_by_hash(
+            images, 
+            self.hamming_threshold,
+            archive_path,
+            temp_dir,
+            image_archive_map,
+            self._calculate_hashes_for_images  # 传递类方法作为计算哈希的函数
         )
         
-        # 处理结果,构建相似图片组
-        for target_hash, similar_hashes in similar_results.items():
-            if target_hash not in processed:
-                current_group = [img_by_hash[target_hash]]
-                processed.add(target_hash)
-                
-                for similar_hash, uri, distance in similar_hashes:
-                    if similar_hash not in processed:
-                        current_group.append(img_by_hash[similar_hash])
-                        processed.add(similar_hash)
-                        logger.info(f"找到相似图片: {os.path.basename(uri)} (距离: {distance})")
-                
-                if len(current_group) > 1:
-                    similar_groups.append(current_group)
-                    logger.info(f"找到相似图片组: {len(current_group)}张")
-                
-        return similar_groups
+        # 只返回多图片组
+        return [group for group in groups if len(group) > 1]
     
     def _process_watermark_images(self, group: List[str], watermark_keywords: List[str] = None) -> Tuple[Set[str], Dict[str, Dict]]:
         """处理水印过滤"""
@@ -809,41 +801,15 @@ class DuplicateImageDetector:
     def _compare_hash_with_reference(self, img_path: str, current_uri: str, current_hash: str, 
                                    hash_data: Dict, threshold: int) -> Tuple[str, int]:
         """比较哈希值与参考哈希值"""
-        try:
-            # 使用加速器进行批量比较
-            ref_hashes = []
-            uri_map = {}
-            
-            # 收集参考哈希值
-            for uri, ref_data in hash_data.items():
-                if uri == current_uri:
-                    continue
-                    
-                ref_hash = ref_data.get('hash') if isinstance(ref_data, dict) else str(ref_data)
-                if not ref_hash:
-                    continue
-                    
-                ref_hashes.append(ref_hash)
-                uri_map[ref_hash] = uri
-            
-            # 使用加速器查找相似哈希
-            similar_hashes = HashAccelerator.find_similar_hashes(
-                current_hash,
-                ref_hashes,
-                uri_map,
-                threshold
-            )
-            
-            # 如果找到相似哈希,返回第一个(最相似的)
-            if similar_hashes:
-                ref_hash, uri, distance = similar_hashes[0]
-                return uri, distance
-                
-            return None
-            
-        except Exception as e:
-            logger.error(f"[#hash_calc]比较哈希值失败 {img_path}: {e}")
-            return None
+        # 过滤掉当前URI
+        filtered_hash_data = {uri: data for uri, data in hash_data.items() if uri != current_uri}
+        
+        # 使用utils.py中的compare_hash_with_reference函数
+        result = compare_hash_with_reference(current_hash, filtered_hash_data, threshold)
+        
+        if result:
+            return result
+        return None
 
     def _find_similar_images_by_lpips_cluster(self, images: List[str], use_gpu: bool = None, threshold: float = None) -> List[List[str]]:
         """
@@ -913,6 +879,42 @@ class DuplicateImageDetector:
                 logger.info(f"[#hash_calc]找到相似图像组 {cluster_id}: {len(group)}张")
         
         return similar_groups
+
+    def _find_similar_images_by_phash_lpips_cluster(self, images: List[str], archive_path: str = None, 
+                                                  temp_dir: str = None, image_archive_map: Dict[str, Union[str, Dict]] = None,
+                                                  use_gpu: bool = None, threshold: float = None) -> List[List[str]]:
+        """
+        使用两阶段策略查找相似图片组：
+        1. 首先用哈希(汉明距离)对图片进行预分组，减少LPIPS计算量
+        2. 然后对每个预分组内的图片进行LPIPS聚类
+        
+        Args:
+            images: 图片文件列表
+            archive_path: 原始压缩包路径
+            temp_dir: 临时解压目录
+            image_archive_map: 图片到压缩包内的映射
+            use_gpu: 是否使用GPU（覆盖实例设置）
+            threshold: LPIPS距离阈值（覆盖实例设置）
+            
+        Returns:
+            List[List[str]]: 相似图片组列表
+        """
+        # 使用传入的阈值或默认值
+        current_threshold = self.lpips_threshold if threshold is None else threshold
+        current_use_gpu = self.use_gpu if use_gpu is None else use_gpu
+        
+        # 使用工具函数中的实现
+        return find_similar_images_by_phash_lpips_cluster(
+            images=images,
+            lpips_threshold=current_threshold,
+            hash_threshold=self.hamming_threshold,
+            calculate_hashes_func=self._calculate_hashes_for_images,
+            lpips_cluster_func=self._find_similar_images_by_lpips_cluster,
+            archive_path=archive_path,
+            temp_dir=temp_dir,
+            image_archive_map=image_archive_map,
+            use_gpu=current_use_gpu
+        )
 
     def _process_lpips_images(self, group: List[str]) -> Tuple[Set[str], Dict[str, Dict]]:
         """处理LPIPS相似图片组，采用与quality相同的策略（保留最大文件）"""
