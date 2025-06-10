@@ -14,6 +14,9 @@ import base64
 import io
 import zipfile
 import tempfile
+import hashlib
+import os
+from functools import lru_cache
 
 # 页面配置
 st.set_page_config(
@@ -97,6 +100,68 @@ def load_session_state():
         st.session_state.image_files = []
     if 'analysis_complete' not in st.session_state:
         st.session_state.analysis_complete = False
+    if 'hash_cache' not in st.session_state:
+        st.session_state.hash_cache = {}
+
+@st.cache_data(show_spinner=False)
+def get_file_info(file_path):
+    """获取文件信息用于缓存键"""
+    try:
+        stat = os.stat(file_path)
+        return {
+            'size': stat.st_size,
+            'mtime': stat.st_mtime,
+            'path': str(file_path)
+        }
+    except Exception:
+        return None
+
+def create_cache_key(file_path, hash_size):
+    """创建缓存键"""
+    file_info = get_file_info(file_path)
+    if file_info is None:
+        return None
+    
+    # 基于文件路径、大小、修改时间和哈希尺寸创建键
+    cache_data = f"{file_info['path']}_{file_info['size']}_{file_info['mtime']}_{hash_size}"
+    return hashlib.md5(cache_data.encode()).hexdigest()
+
+@lru_cache(maxsize=1000)
+def _calculate_single_phash(file_path_str, hash_size, cache_key):
+    """计算单个图片的pHash（带LRU缓存）"""
+    try:
+        with Image.open(file_path_str) as im:
+            return str(imagehash.phash(im, hash_size=hash_size))
+    except Exception as e:
+        st.warning(f"图片处理失败: {file_path_str}，原因: {e}")
+        return None
+
+def calculate_image_hash_cached(file_path, hash_size):
+    """计算图片哈希（带缓存）"""
+    file_path_str = str(file_path)
+    cache_key = create_cache_key(file_path_str, hash_size)
+    
+    if cache_key is None:
+        # 文件不存在或无法访问，直接计算
+        try:
+            with Image.open(file_path_str) as im:
+                return str(imagehash.phash(im, hash_size=hash_size))
+        except Exception as e:
+            st.warning(f"图片处理失败: {file_path_str}，原因: {e}")
+            return None
+    
+    # 检查session state缓存
+    if cache_key in st.session_state.hash_cache:
+        return st.session_state.hash_cache[cache_key]
+    
+    # 使用LRU缓存计算
+    hash_value = _calculate_single_phash(file_path_str, hash_size, cache_key)
+    
+    # 存储到session state缓存
+    if hash_value is not None:
+        st.session_state.hash_cache[cache_key] = hash_value
+    
+    return hash_value
 
 def scan_images(image_dir, config):
     """扫描图片文件"""
@@ -120,25 +185,35 @@ def scan_images(image_dir, config):
     return image_files
 
 def calc_hashes_for_images(image_files, hash_size):
-    """计算图片哈希"""
+    """计算图片哈希（使用缓存优化）"""
     hashes = {}
     total = len(image_files)
+    cache_hits = 0
     
     progress_bar = st.progress(0)
     status_text = st.empty()
     
     for i, img in enumerate(image_files):
-        try:
-            with Image.open(img) as im:
-                h = imagehash.phash(im, hash_size=hash_size)
-                hashes[str(img)] = str(h)  # 转换为字符串以便JSON序列化
-            
-            progress = (i + 1) / total
-            progress_bar.progress(progress)
-            status_text.text(f"计算哈希 ({hash_size}): {i + 1}/{total}")
-            
-        except Exception as e:
-            st.warning(f"图片处理失败: {img}，原因: {e}")
+        # 检查缓存
+        cache_key = create_cache_key(str(img), hash_size)
+        if cache_key and cache_key in st.session_state.hash_cache:
+            # 缓存命中
+            hashes[str(img)] = st.session_state.hash_cache[cache_key]
+            cache_hits += 1
+        else:
+            # 计算新哈希
+            hash_value = calculate_image_hash_cached(img, hash_size)
+            if hash_value is not None:
+                hashes[str(img)] = hash_value
+        
+        progress = (i + 1) / total
+        progress_bar.progress(progress)
+        status_text.text(f"计算哈希 ({hash_size}): {i + 1}/{total} (缓存命中: {cache_hits})")
+    
+    # 显示缓存统计
+    if cache_hits > 0:
+        cache_ratio = cache_hits / total * 100
+        st.success(f"✅ 哈希计算完成！缓存命中率: {cache_ratio:.1f}% ({cache_hits}/{total})")
     
     return hashes
 
@@ -281,6 +356,28 @@ def create_duplicate_report(results, similarity_threshold=10):
         duplicates[size] = size_duplicates
     
     return duplicates
+
+def clear_hash_cache():
+    """清理哈希缓存"""
+    if 'hash_cache' in st.session_state:
+        cache_size = len(st.session_state.hash_cache)
+        st.session_state.hash_cache.clear()
+        _calculate_single_phash.cache_clear()  # 清理LRU缓存
+        return cache_size
+    return 0
+
+def get_cache_info():
+    """获取缓存信息"""
+    session_cache_size = len(st.session_state.hash_cache) if 'hash_cache' in st.session_state else 0
+    lru_cache_info = _calculate_single_phash.cache_info()
+    
+    return {
+        'session_cache_entries': session_cache_size,
+        'lru_cache_hits': lru_cache_info.hits,
+        'lru_cache_misses': lru_cache_info.misses,
+        'lru_cache_size': lru_cache_info.currsize,
+        'lru_cache_max': lru_cache_info.maxsize
+    }
 
 def main():
     config = load_config()
