@@ -223,9 +223,9 @@ def group_images_by_hash(images: List[str], hamming_threshold: int,
         raise ValueError("必须提供计算哈希值的函数")
         
     image_hashes = calculate_hashes_func(images, archive_path, temp_dir, image_archive_map)
-    
-    # 提取哈希值用于比较
+      # 提取哈希值用于比较
     hash_values = {img: hash_val for img, (uri, hash_val) in image_hashes.items()}
+    uri_values = {img: uri for img, (uri, hash_val) in image_hashes.items()}
     
     # 准备分组
     groups = []
@@ -237,13 +237,16 @@ def group_images_by_hash(images: List[str], hamming_threshold: int,
     # 获取所有哈希值列表和对应的图片
     target_hashes = list(hash_values.values())
     img_by_hash = {hash_val: img for img, hash_val in hash_values.items()}
+    hash_to_uri = {hash_val: uri_values[img] for img, hash_val in hash_values.items()}
+    target_hash_to_uri = {hash_val: uri_values[img] for img, hash_val in hash_values.items()}
     
     # 批量查找相似哈希
     similar_results = HashAccelerator.batch_find_similar_hashes(
         target_hashes,
         target_hashes,
-        img_by_hash,
-        hamming_threshold
+        hash_to_uri,
+        hamming_threshold,
+        target_hash_to_uri
     )
     
     # 处理结果，构建分组
@@ -268,7 +271,8 @@ def group_images_by_hash(images: List[str], hamming_threshold: int,
     return groups
 
 
-def compare_hash_with_reference(current_hash: str, hash_data: Dict, threshold: int) -> Optional[Tuple[str, int]]:
+def compare_hash_with_reference(current_hash: str, hash_data: Dict, threshold: int, 
+                              current_uri: Optional[str] = None) -> Optional[Tuple[str, int]]:
     """
     比较哈希值与参考哈希值
     
@@ -276,6 +280,7 @@ def compare_hash_with_reference(current_hash: str, hash_data: Dict, threshold: i
         current_hash: 当前哈希值
         hash_data: 参考哈希数据字典
         threshold: 汉明距离阈值
+        current_uri: 当前文件的URI，用于排除自身匹配
         
     Returns:
         Optional[Tuple[str, int]]: (匹配的URI, 距离) 或 None
@@ -299,7 +304,8 @@ def compare_hash_with_reference(current_hash: str, hash_data: Dict, threshold: i
             current_hash,
             ref_hashes,
             uri_map,
-            threshold
+            threshold,
+            current_uri
         )
         
         # 如果找到相似哈希,返回第一个(最相似的)

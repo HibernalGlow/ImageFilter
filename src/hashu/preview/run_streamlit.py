@@ -30,7 +30,7 @@ def install_requirements():
 
 def main():
     """启动 Streamlit 应用"""
-    install_requirements()
+    # install_requirements()
     
     app_path = Path(__file__).parent / "streamlit_app.py"
     

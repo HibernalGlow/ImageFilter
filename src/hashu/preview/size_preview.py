@@ -5,6 +5,7 @@ from PIL import Image
 import pillow_avif
 import pillow_jxl 
 import imagehash
+import json
 from rich.progress import Progress, TextColumn, BarColumn, TimeElapsedColumn, TimeRemainingColumn, SpinnerColumn
 from rich.console import Console
 from rich.table import Table
@@ -258,6 +259,231 @@ def generate_html_report(results, image_files, output_path="phash_benchmark_repo
     
     console.print(table)
 
+def find_similar_groups(pairs, threshold):
+    """
+    根据阈值找出相似图片组
+    Args:
+        pairs: [(img1, img2, distance), ...] 图片对列表
+        threshold: 汉明距离阈值，小于等于此值认为相似
+    Returns:
+        list: 相似图片组列表，每组是一个包含相似图片路径的集合
+    """
+    # 筛选出相似的图片对
+    similar_pairs = [(img1, img2) for img1, img2, dist in pairs if dist <= threshold]
+    
+    if not similar_pairs:
+        return []
+    
+    # 使用并查集算法将相似的图片归类到同一组
+    groups = []
+    processed = set()
+    
+    for img1, img2 in similar_pairs:
+        if img1 in processed and img2 in processed:
+            continue
+            
+        # 找到包含这两个图片的组
+        group_for_img1 = None
+        group_for_img2 = None
+        
+        for group in groups:
+            if img1 in group:
+                group_for_img1 = group
+            if img2 in group:
+                group_for_img2 = group
+                
+        if group_for_img1 is None and group_for_img2 is None:
+            # 创建新组
+            new_group = {img1, img2}
+            groups.append(new_group)
+        elif group_for_img1 is not None and group_for_img2 is None:
+            # 将img2加入img1所在的组
+            group_for_img1.add(img2)
+        elif group_for_img1 is None and group_for_img2 is not None:
+            # 将img1加入img2所在的组
+            group_for_img2.add(img1)
+        elif group_for_img1 != group_for_img2:
+            # 合并两个组
+            group_for_img1.update(group_for_img2)
+            groups.remove(group_for_img2)
+            
+        processed.add(img1)
+        processed.add(img2)
+    
+    return groups
+
+def export_similar_groups(results, threshold, output_dir, hash_size=None):
+    """
+    导出相似组，生成保留和删除文件列表
+    Args:
+        results: benchmark_phash_sizes的结果
+        threshold: 汉明距离阈值
+        output_dir: 输出目录
+        hash_size: 指定使用哪个哈希尺寸的结果，如果为None则使用第一个
+    """
+    output_dir = Path(output_dir)
+    output_dir.mkdir(exist_ok=True)
+    
+    if hash_size is None:
+        # 使用第一个哈希尺寸
+        hash_size = list(results.keys())[0]
+    
+    if hash_size not in results:
+        console.print(f"[red]错误：找不到哈希尺寸 {hash_size} 的结果[/red]")
+        return
+    
+    pairs = results[hash_size]["pairs"]
+    
+    console.print(f"[bold]使用哈希尺寸: [cyan]{hash_size}[/cyan]，阈值: [yellow]{threshold}[/yellow][/bold]")
+    
+    # 找出相似图片组
+    similar_groups = find_similar_groups(pairs, threshold)
+    
+    if not similar_groups:
+        console.print("[bold red]在指定阈值下未找到相似图片组[/bold red]")
+        return
+    
+    console.print(f"[bold green]找到 {len(similar_groups)} 个相似图片组[/bold green]")
+    
+    # 生成保留和删除列表
+    keep_files = []
+    delete_files = []
+    group_info = []
+    
+    for i, group in enumerate(similar_groups, 1):
+        # 按文件名排序，保留第一个
+        sorted_files = sorted(list(group), key=lambda x: Path(x).name.lower())
+        keep_file = sorted_files[0]
+        delete_files_in_group = sorted_files[1:]
+        
+        keep_files.append(keep_file)
+        delete_files.extend(delete_files_in_group)
+        
+        group_info.append({
+            "group_id": i,
+            "keep_file": keep_file,
+            "delete_files": delete_files_in_group,
+            "total_files": len(sorted_files)
+        })
+        
+        console.print(f"[bold]组 {i}[/bold]: 保留 [green]{Path(keep_file).name}[/green], 删除 {len(delete_files_in_group)} 个文件")
+    
+    # 导出JSON格式的详细信息
+    export_data = {
+        "metadata": {
+            "threshold": threshold,
+            "hash_size": hash_size,
+            "total_groups": len(similar_groups),
+            "total_keep_files": len(keep_files),
+            "total_delete_files": len(delete_files),
+            "export_time": time.strftime("%Y-%m-%d %H:%M:%S")
+        },
+        "groups": group_info
+    }
+    
+    json_path = output_dir / f"similar_groups_threshold_{threshold}_hashsize_{hash_size}.json"
+    with open(json_path, 'w', encoding='utf-8') as f:
+        json.dump(export_data, f, ensure_ascii=False, indent=2)
+    
+    # 导出保留文件列表
+    keep_list_path = output_dir / f"keep_files_threshold_{threshold}_hashsize_{hash_size}.txt"
+    with open(keep_list_path, 'w', encoding='utf-8') as f:
+        for file_path in keep_files:
+            f.write(f"{file_path}\n")
+    
+    # 导出删除文件列表
+    delete_list_path = output_dir / f"delete_files_threshold_{threshold}_hashsize_{hash_size}.txt"
+    with open(delete_list_path, 'w', encoding='utf-8') as f:
+        for file_path in delete_files:
+            f.write(f"{file_path}\n")
+    
+    # 导出批处理删除脚本
+    batch_script_path = output_dir / f"delete_similar_files_threshold_{threshold}_hashsize_{hash_size}.bat"
+    with open(batch_script_path, 'w', encoding='utf-8') as f:
+        f.write("@echo off\n")
+        f.write(f"REM 删除相似图片脚本 - 阈值: {threshold}, 哈希尺寸: {hash_size}\n")
+        f.write(f"REM 生成时间: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+        f.write("echo 准备删除以下相似图片文件:\n")
+        f.write("pause\n\n")
+        for file_path in delete_files:
+            # 转换为Windows路径格式并添加引号处理空格
+            win_path = str(Path(file_path)).replace('/', '\\')
+            f.write(f'del "{win_path}"\n')
+        f.write("\necho 删除完成!\npause\n")
+    
+    # 生成摘要表格
+    summary_table = Table(title=f"相似组导出摘要 (阈值: {threshold}, 哈希尺寸: {hash_size})")
+    summary_table.add_column("项目", style="cyan")
+    summary_table.add_column("数量", style="green", justify="right")
+    summary_table.add_column("文件路径", style="yellow")
+    
+    summary_table.add_row("相似组数量", str(len(similar_groups)), "")
+    summary_table.add_row("保留文件", str(len(keep_files)), str(keep_list_path))
+    summary_table.add_row("删除文件", str(len(delete_files)), str(delete_list_path))
+    summary_table.add_row("详细信息", "", str(json_path))
+    summary_table.add_row("删除脚本", "", str(batch_script_path))
+    
+    console.print(summary_table)
+    
+    console.print(f"\n[bold green]导出完成！文件保存在: {output_dir.resolve()}[/bold green]")
+    
+    return {
+        "keep_files": keep_files,
+        "delete_files": delete_files,
+        "groups": similar_groups,
+        "export_files": {
+            "json": json_path,
+            "keep_list": keep_list_path,
+            "delete_list": delete_list_path,
+            "batch_script": batch_script_path
+        }
+    }
+
+def quick_export_from_existing_results(results_file_path, threshold, hash_size=None, output_dir=None):
+    """
+    从已有的结果文件快速导出相似组
+    Args:
+        results_file_path: 包含计算结果的pickle或json文件路径
+        threshold: 汉明距离阈值
+        hash_size: 指定使用哪个哈希尺寸的结果
+        output_dir: 输出目录，如果为None则使用结果文件所在目录
+    """
+    import pickle
+    
+    results_path = Path(results_file_path)
+    if not results_path.exists():
+        console.print(f"[red]错误：结果文件不存在: {results_file_path}[/red]")
+        return
+    
+    if output_dir is None:
+        output_dir = results_path.parent
+    
+    try:
+        # 尝试加载pickle文件
+        with open(results_path, 'rb') as f:
+            data = pickle.load(f)
+            
+        if isinstance(data, tuple) and len(data) == 2:
+            results, image_files = data
+        else:
+            results = data
+            
+        console.print(f"[bold green]成功加载结果文件: {results_path}[/bold green]")
+        
+        # 导出相似组
+        export_result = export_similar_groups(
+            results, 
+            threshold, 
+            output_dir=output_dir,
+            hash_size=hash_size
+        )
+        
+        return export_result
+        
+    except Exception as e:
+        console.print(f"[red]加载结果文件失败: {e}[/red]")
+        return None
+
 if __name__ == "__main__":
     
     
@@ -274,3 +500,128 @@ if __name__ == "__main__":
     results, image_files = benchmark_phash_sizes(folder, hash_sizes=hash_sizes)
     output_path = Path(folder) / "phash_benchmark_report.html"
     generate_html_report(results, image_files, output_path=output_path)
+    
+    # 询问是否需要导出相似组
+    export_choice = Prompt.ask(
+        "\n是否需要导出相似图片组用于删除重复文件？", 
+        choices=["y", "n"], 
+        default="y"
+    )
+    
+    if export_choice == "y":
+        # 选择使用哪个哈希尺寸的结果
+        if len(hash_sizes) > 1:
+            console.print("\n[bold]可用的哈希尺寸结果:[/bold]")
+            for i, size in enumerate(hash_sizes, 1):
+                dists = results[size]["dists"]
+                avg_dist = f"{sum(dists)/len(dists):.2f}" if dists else "N/A"
+                console.print(f"  {i}. 尺寸 {size} (平均汉明距离: {avg_dist})")
+            
+            size_choice = Prompt.ask(
+                "请选择要用于导出的哈希尺寸", 
+                choices=[str(i) for i in range(1, len(hash_sizes) + 1)],
+                default="1"
+            )
+            selected_hash_size = hash_sizes[int(size_choice) - 1]
+        else:
+            selected_hash_size = hash_sizes[0]
+        
+        # 输入阈值
+        dists = results[selected_hash_size]["dists"]
+        if dists:
+            max_dist = max(dists)
+            min_dist = min(dists)
+            avg_dist = sum(dists) / len(dists)
+            console.print(f"\n[bold]当前数据集汉明距离统计 (哈希尺寸: {selected_hash_size}):[/bold]")
+            console.print(f"  最小距离: [blue]{min_dist}[/blue]")
+            console.print(f"  平均距离: [yellow]{avg_dist:.2f}[/yellow]")
+            console.print(f"  最大距离: [red]{max_dist}[/red]")
+            
+            suggested_threshold = max(1, int(avg_dist * 0.3))  # 建议阈值为平均距离的30%
+            
+            threshold = int(Prompt.ask(
+                f"请输入汉明距离阈值（小于等于此值认为相似，建议: {suggested_threshold}）",
+                default=str(suggested_threshold)
+            ))
+            
+            # 导出相似组
+            export_result = export_similar_groups(
+                results, 
+                threshold, 
+                output_dir=folder,
+                hash_size=selected_hash_size
+            )
+            
+            if export_result and export_result["delete_files"]:
+                console.print(f"\n[bold yellow]注意：[/bold yellow]")
+                console.print(f"- 已生成 [cyan]{len(export_result['delete_files'])}[/cyan] 个重复文件的删除列表")
+                console.print(f"- 保留 [green]{len(export_result['keep_files'])}[/green] 个文件（每组中按名称排序的第一个）")
+                console.print(f"- 请仔细检查删除列表后再执行删除操作")
+                console.print(f"- 可以运行生成的 .bat 脚本进行批量删除")
+        else:
+            console.print("[bold red]无汉明距离数据，无法导出相似组[/bold red]")
+    
+    # 询问是否从已有结果文件导出相似组
+    quick_export_choice = Prompt.ask(
+        "\n是否需要从已有的结果文件快速导出相似组？", 
+        choices=["y", "n"], 
+        default="n"
+    )
+    
+    if quick_export_choice == "y":
+        results_file = Prompt.ask("请输入结果文件路径")
+        if not Path(results_file).exists():
+            console.print(f"[red]错误：结果文件不存在: {results_file}[/red]")
+        else:
+            # 选择哈希尺寸
+            available_hash_sizes = list(results.keys())
+            if len(available_hash_sizes) > 1:
+                console.print("\n[bold]可用的哈希尺寸结果:[/bold]")
+                for i, size in enumerate(available_hash_sizes, 1):
+                    dists = results[size]["dists"]
+                    avg_dist = f"{sum(dists)/len(dists):.2f}" if dists else "N/A"
+                    console.print(f"  {i}. 尺寸 {size} (平均汉明距离: {avg_dist})")
+                
+                size_choice = Prompt.ask(
+                    "请选择要用于导出的哈希尺寸", 
+                    choices=[str(i) for i in range(1, len(available_hash_sizes) + 1)],
+                    default="1"
+                )
+                selected_hash_size = available_hash_sizes[int(size_choice) - 1]
+            else:
+                selected_hash_size = available_hash_sizes[0]
+            
+            # 输入阈值
+            dists = results[selected_hash_size]["dists"]
+            if dists:
+                max_dist = max(dists)
+                min_dist = min(dists)
+                avg_dist = sum(dists) / len(dists)
+                console.print(f"\n[bold]当前数据集汉明距离统计 (哈希尺寸: {selected_hash_size}):[/bold]")
+                console.print(f"  最小距离: [blue]{min_dist}[/blue]")
+                console.print(f"  平均距离: [yellow]{avg_dist:.2f}[/yellow]")
+                console.print(f"  最大距离: [red]{max_dist}[/red]")
+                
+                suggested_threshold = max(1, int(avg_dist * 0.3))  # 建议阈值为平均距离的30%
+                
+                threshold = int(Prompt.ask(
+                    f"请输入汉明距离阈值（小于等于此值认为相似，建议: {suggested_threshold}）",
+                    default=str(suggested_threshold)
+                ))
+                
+                # 快速导出相似组
+                export_result = quick_export_from_existing_results(
+                    results_file, 
+                    threshold, 
+                    hash_size=selected_hash_size,
+                    output_dir=folder
+                )
+                
+                if export_result and export_result["delete_files"]:
+                    console.print(f"\n[bold yellow]注意：[/bold yellow]")
+                    console.print(f"- 已生成 [cyan]{len(export_result['delete_files'])}[/cyan] 个重复文件的删除列表")
+                    console.print(f"- 保留 [green]{len(export_result['keep_files'])}[/green] 个文件（每组中按名称排序的第一个）")
+                    console.print(f"- 请仔细检查删除列表后再执行删除操作")
+                    console.print(f"- 可以运行生成的 .bat 脚本进行批量删除")
+            else:
+                console.print("[bold red]无汉明距离数据，无法导出相似组[/bold red]")

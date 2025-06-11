@@ -563,12 +563,8 @@ class DuplicateImageDetector:
             # 使用加速器进行批量比较
             ref_hashes = []
             uri_map = {}
-            
-            # 收集参考哈希值
+                  # 收集参考哈希值
             for uri, ref_data in hash_data.items():
-                if uri == current_uri:
-                    continue
-                    
                 ref_hash = ref_data.get('hash') if isinstance(ref_data, dict) else str(ref_data)
                 if not ref_hash:
                     continue
@@ -581,9 +577,10 @@ class DuplicateImageDetector:
                 current_hash,
                 ref_hashes,
                 uri_map,
-                threshold
+                threshold,
+                current_uri
             )
-            
+                
             # 如果找到相似哈希,返回第一个(最相似的)
             if similar_hashes:
                 ref_hash, uri, distance = similar_hashes[0]
