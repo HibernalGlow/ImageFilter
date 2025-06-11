@@ -524,7 +524,7 @@ class Application:
             parser=parser,
             title="图片过滤工具",
             preset_configs=preset_configs,
-            # on_run=on_run
+            on_run=on_run
             # on_run=False
         )
         

@@ -33,6 +33,9 @@ from imgfilter.detectors.utils import (
     find_similar_images_by_phash_lpips_cluster
 )
 
+# 导入group filter功能
+from imgfilter.detectors.group.group_filter import process_group_with_filters
+
 # 设置基础环境变量
 os.environ["HF_DATASETS_OFFLINE"] = "1"  
 os.environ["TRANSFORMERS_OFFLINE"] = "1"
@@ -714,7 +717,6 @@ class DuplicateImageDetector:
             
         # 找出无水印的图片
         clean_images = [img for img, (has_mark, _) in watermark_results.items() if not has_mark]
-        
         if clean_images:
             # 如果有无水印图片，保留其中最大的一张
             keep_image = max(clean_images, key=lambda x: os.path.getsize(x))
@@ -726,36 +728,27 @@ class DuplicateImageDetector:
         return to_delete
         
     def _process_quality_images(self, group: List[str]) -> Tuple[Set[str], Dict[str, Dict]]:
-        """处理质量过滤"""
-        to_delete = set()
-        removal_reasons = {}
-        
-        deleted_files = self._apply_quality_filter(group)
-        for img, size_diff in deleted_files:
-            to_delete.add(img)
-            removal_reasons[img] = {
-                'reason': 'quality',
-                'size_diff': size_diff
-            }
-            logger.info(f"标记删除较小图片: {os.path.basename(img)}")
-            
-        return to_delete, removal_reasons
+        """处理质量过滤，使用统一的综合过滤策略（逐档位过滤）"""
+        # 使用新的逐档位过滤策略：默认只用尺寸档位，相同时自动切换到下一档位
+        return process_group_with_filters(group, {
+            'enable_progressive': True,       # 是否启用逐档位过滤模式
+            'use_dimensions': True,           # 是否使用图片尺寸（像素数量）
+            'use_file_size': True,            # 是否使用文件大小
+            'use_filename': True,             # 是否使用文件名
+            'reverse_filename': False,        # 文件名排序是否反向（True=保留名称大的，False=保留名称小的）
+            'filter_order': ['dimensions', 'file_size', 'filename']  # 过滤器顺序
+        })
 
     def _apply_quality_filter(self, group: List[str]) -> List[Tuple[str, str]]:
-        """应用质量过滤（基于文件大小），返回要删除的图片和大小差异"""
-        to_delete = []
-        # 获取文件大小
-        file_sizes = {img: os.path.getsize(img) for img in group}
-        # 保留最大的文件
-        keep_image = max(group, key=lambda x: file_sizes[x])
-        
-        # 删除其他较小的文件
-        for img in group:
-            if img != keep_image:
-                size_diff = f"{file_sizes[keep_image] - file_sizes[img]} bytes"
-                to_delete.append((img, size_diff))
-                
-        return to_delete
+        """应用质量过滤（已弃用，保留以兼容旧代码）"""
+        logger.warning("_apply_quality_filter已弃用，建议使用process_group_with_filters")
+        # 调用新的统一过滤方法
+        to_delete, reasons = self._process_quality_images(group)
+        result = []
+        for img in to_delete:
+            reason_detail = reasons[img].get('details', 'quality filter')
+            result.append((img, reason_detail))
+        return result
     
     def _process_hash_images(self, group: List[str], archive_path: str = None, temp_dir: str = None, 
                            image_archive_map: Dict[str, Union[str, Dict]] = None, ref_hamming_threshold: int = None) -> Tuple[Set[str], Dict[str, Dict]]:
@@ -917,17 +910,21 @@ class DuplicateImageDetector:
         )
 
     def _process_lpips_images(self, group: List[str]) -> Tuple[Set[str], Dict[str, Dict]]:
-        """处理LPIPS相似图片组，采用与quality相同的策略（保留最大文件）"""
-        to_delete = set()
-        removal_reasons = {}
+        """处理LPIPS相似图片组，使用统一的综合过滤策略"""
+        # 使用综合过滤策略：尺寸大 > 文件大小大 > 文件名小
+        to_delete, removal_reasons = process_group_with_filters(group, {
+            'enable_progressive': True,       # 是否启用逐档位过滤模式
+            'use_dimensions': True,           # 是否使用图片尺寸（像素数量）
+            'use_file_size': True,            # 是否使用文件大小
+            'use_filename': True,             # 是否使用文件名
+            'reverse_filename': False,        # 文件名排序是否反向（True=保留名称大的，False=保留名称小的）
+            'filter_order': ['dimensions', 'file_size', 'filename']  # 过滤器顺序
+        })
         
-        deleted_files = self._apply_quality_filter(group)
-        for img, size_diff in deleted_files:
-            to_delete.add(img)
-            removal_reasons[img] = {
-                'reason': 'cluster',  # 修改原因标记为 cluster
-                'size_diff': size_diff
-            }
-            logger.info(f"标记删除LPIPS相似图片: {os.path.basename(img)}")
-            
+        # 更新原因标记为 cluster
+        for img in to_delete:
+            if img in removal_reasons:
+                removal_reasons[img]['reason'] = 'cluster'
+                logger.info(f"标记删除LPIPS相似图片: {os.path.basename(img)} - {removal_reasons[img].get('details', '')}")
+        
         return to_delete, removal_reasons
