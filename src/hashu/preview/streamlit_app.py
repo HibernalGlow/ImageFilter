@@ -773,7 +773,7 @@ def render_duplicate_detection_tab(config):
         dup_threshold = st.slider(
             "疑似重复阈值",
             min_value=0,
-            max_value=20,
+            max_value=60,
             value=config["distance_thresholds"]["very_similar"],
             help="汉明距离小于此值的图片将被视为疑似重复"
         )

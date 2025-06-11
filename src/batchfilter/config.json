@@ -46,7 +46,7 @@
             "description": "仅去除重复图片",
             "checkbox_options": ["enable_duplicate_filter", "clipboard"],
             "input_values": {
-                "ref_hamming_threshold": "12",
+                "ref_hamming_threshold": "6",
                 "duplicate_filter_mode": "quality"
             }
         },
@@ -85,7 +85,7 @@
             "checkbox_options": ["merge_archives", "enable_duplicate_filter", "clipboard"],
             "input_values": {
                 "duplicate_filter_mode": "quality",
-                "ref_hamming_threshold": "1"
+                "ref_hamming_threshold": "4"
             }
         },
         "完整过滤": {

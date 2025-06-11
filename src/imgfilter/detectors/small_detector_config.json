@@ -2,7 +2,7 @@
   "default_settings": {
     "min_size": 630,
     "width_range": [],
-    "height_range": [0,631]
+    "height_range": []
   },
   "description": {
     "min_size": "默认最小图片尺寸，当width_range和height_range都为空时使用",

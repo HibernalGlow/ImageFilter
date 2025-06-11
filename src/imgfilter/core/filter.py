@@ -4,7 +4,6 @@ ImgFilter核心过滤器模块
 import os
 import logging
 from typing import List, Set, Dict, Tuple
-from concurrent.futures import ThreadPoolExecutor, as_completed
 import multiprocessing
 from loguru import logger
 import json
@@ -45,9 +44,64 @@ class ImageFilter:
         )
         self.small_image_detector = SmallImageDetector()
         self.grayscale_detector = GrayscaleImageDetector()
-        
         self.max_workers = max_workers or multiprocessing.cpu_count()
         
+    def _process_small_images(self, files: List[str], min_size: int) -> Tuple[Set[str], Dict[str, Dict]]:
+        """处理小图过滤"""
+        logger.info(f"[#cur_stats]开始小图过滤，处理{len(files)}张图片")
+        try:
+            return self.small_image_detector.detect_small_images(files, min_size)
+        except Exception as e:
+            logger.error(f"[#update_log]❌ 小图过滤执行错误: {str(e)}")
+            return set(), {}
+    
+    def _process_grayscale_images(self, files: List[str]) -> Tuple[Set[str], Dict[str, Dict]]:
+        """处理灰度图过滤"""
+        logger.info(f"[#cur_stats]开始灰度图过滤，处理{len(files)}张图片")
+        try:
+            return self.grayscale_detector.detect_grayscale_images(files)
+        except Exception as e:
+            logger.error(f"[#update_log]❌ 灰度图过滤执行错误: {str(e)}")
+            return set(), {}
+    
+    def _process_duplicate_images(self, files: List[str], archive_path: str = None, temp_dir: str = None,
+                                image_archive_map: Dict[str, str] = None, duplicate_filter_mode: str = 'quality',
+                                watermark_keywords: List[str] = None, ref_hamming_threshold: int = None,
+                                lpips_threshold: float = None, *args, **kwargs) -> Tuple[Set[str], Dict[str, Dict]]:
+        """处理重复图片过滤"""
+        logger.info(f"[#cur_stats]开始重复图片过滤，处理{len(files)}张图片")
+        try:
+            return self.duplicate_detector.detect_duplicates(
+                files,
+                archive_path=archive_path,
+                temp_dir=temp_dir,
+                image_archive_map=image_archive_map,
+                mode=duplicate_filter_mode,
+                watermark_keywords=watermark_keywords,
+                ref_hamming_threshold=ref_hamming_threshold,
+                lpips_threshold=lpips_threshold,
+                *args,
+                **kwargs
+            )
+        except Exception as e:
+            logger.error(f"[#update_log]❌ 重复图片过滤执行错误: {str(e)}")
+            return set(), {}
+    
+    def _process_text_images(self, files: List[str], text_threshold: float = 0.5, 
+                           *args, **kwargs) -> Tuple[Set[str], Dict[str, Dict]]:
+        """处理纯文本图片过滤"""
+        logger.info(f"[#cur_stats]开始纯文本图片过滤，处理{len(files)}张图片")
+        try:
+            return self.text_detector.process_text_images(
+                files, 
+                threshold=text_threshold,
+                *args,
+                **kwargs
+            )
+        except Exception as e:
+            logger.error(f"[#update_log]❌ 纯文本图片过滤执行错误: {str(e)}")
+            return set(), {}
+
     def process_images(
         self, 
         image_files: List[str],
@@ -98,55 +152,15 @@ class ImageFilter:
         to_delete = set()
         removal_reasons = {}
         
-        # 定义过滤器配置
+        # 定义过滤器执行顺序
         filters = [
-            # 阶段1: 小图过滤
-            {
-                'name': 'small_image_filter',
-                'enabled': enable_small_filter,
-                'parallel': True,
-                'processor': lambda files: self.small_image_detector.detect_small_images(files, min_size)
-            },
-            # 阶段2: 灰度图过滤
-            {
-                'name': 'grayscale_filter',
-                'enabled': enable_grayscale_filter,
-                'parallel': True,
-                'processor': lambda files: self.grayscale_detector.detect_grayscale_images(files)
-            },
-            # 阶段3: 重复图片过滤
-            {
-                'name': 'duplicate_filter',
-                'enabled': enable_duplicate_filter,
-                'parallel': True,
-                'processor': lambda files: self.duplicate_detector.detect_duplicates(
-                    files,
-                    archive_path=archive_path,
-                    temp_dir=temp_dir,
-                    image_archive_map=image_archive_map,
-                    mode=duplicate_filter_mode,
-                    watermark_keywords=watermark_keywords,
-                    ref_hamming_threshold=ref_hamming_threshold,
-                    lpips_threshold=lpips_threshold,
-                    *args,
-                    **kwargs
-                )
-            },
-            # 阶段4: 纯文本图片过滤
-            {
-                'name': 'text_filter',
-                'enabled': enable_text_filter,
-                'parallel': True,
-                'processor': lambda files: self.text_detector.process_text_images(
-                    files, 
-                    threshold=text_threshold,
-                    *args,
-                    **kwargs
-                )
-            }
+            {'name': 'small_image_filter', 'enabled': enable_small_filter},
+            {'name': 'grayscale_filter', 'enabled': enable_grayscale_filter},
+            {'name': 'duplicate_filter', 'enabled': enable_duplicate_filter},
+            {'name': 'text_filter', 'enabled': enable_text_filter}
         ]
         
-        # 执行所有过滤器
+        # 按顺序执行各个过滤器
         for filter_config in filters:
             if not filter_config['enabled']:
                 continue
@@ -156,27 +170,26 @@ class ImageFilter:
             if not remaining:
                 break
                 
-            if filter_config.get('parallel', False):
-                # 并行处理过滤器
-                if filter_config['enabled']:
-                    # 使用 ThreadPoolExecutor 代替 threaded 装饰器
-                    with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-                        logger.info(f"[#cur_stats]开始并行处理{filter_config['name']} 线程数: {self.max_workers}")
-                        futures = []
-                        futures.append(executor.submit(filter_config['processor'], remaining))
-                        
-                        for future in as_completed(futures):
-                            try:
-                                task_to_delete, task_reasons = future.result()
-                                to_delete.update(task_to_delete)
-                                removal_reasons.update(task_reasons)
-                            except Exception as e:
-                                logger.error(f"[#update_log]❌ 过滤器执行错误: {str(e)}")
+            # 根据过滤器名称调用对应的处理函数
+            if filter_config['name'] == 'small_image_filter':
+                filter_results, filter_reasons = self._process_small_images(remaining, min_size)
+            elif filter_config['name'] == 'grayscale_filter':
+                filter_results, filter_reasons = self._process_grayscale_images(remaining)
+            elif filter_config['name'] == 'duplicate_filter':
+                filter_results, filter_reasons = self._process_duplicate_images(
+                    remaining, archive_path, temp_dir, image_archive_map, 
+                    duplicate_filter_mode, watermark_keywords, ref_hamming_threshold, 
+                    lpips_threshold, *args, **kwargs
+                )
+            elif filter_config['name'] == 'text_filter':
+                filter_results, filter_reasons = self._process_text_images(
+                    remaining, text_threshold, *args, **kwargs
+                )
             else:
-                # 顺序处理单个过滤器
-                filter_results, filter_reasons = filter_config['processor'](remaining)
-                to_delete.update(filter_results)
-                removal_reasons.update(filter_reasons)
+                continue
+                
+            to_delete.update(filter_results)
+            removal_reasons.update(filter_reasons)
         
         return to_delete, removal_reasons
 
