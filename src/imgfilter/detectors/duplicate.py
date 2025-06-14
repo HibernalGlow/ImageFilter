@@ -198,7 +198,7 @@ def _get_image_hash_static(image_path: str, internal_path: str = None, zip_path:
 class DuplicateImageDetector:
     """重复图片检测器，支持多种检测策略"""
     
-    def __init__(self, hash_file: str = None, hamming_threshold: int = 12, 
+    def __init__(self, hash_file: str = None, hamming_threshold: int = 16, 
                  ref_hamming_threshold: int = None, max_workers: int = None,
                  lpips_threshold: float = 0.02, lpips_max_workers: int = 16, 
                  use_gpu: bool = False):  # 添加use_gpu参数

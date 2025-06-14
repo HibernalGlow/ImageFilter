@@ -71,7 +71,7 @@ class HashAccelerator:
             
         Returns:
             np.ndarray: 汉明距离数组
-        """
+        """        
         try:
             # 转换目标哈希
             target_binary = HashAccelerator.hex_to_binary_array(target_hash)
@@ -80,8 +80,13 @@ class HashAccelerator:
                 
             # 预处理参考哈希列表
             ref_matrix = HashAccelerator.preprocess_hash_list(ref_hashes)
-            # if ref_matrix.size == 0:
-            #     return np.array([])
+            if ref_matrix.size == 0:
+                return np.array([])
+                
+            # 检查维度是否匹配
+            if target_binary.shape[0] != ref_matrix.shape[1]:
+                logger.error(f"哈希长度不匹配: target={target_binary.shape[0]}, ref={ref_matrix.shape[1]}")
+                return np.array([])
                 
             # 使用NumPy的广播机制计算汉明距离
             distances = np.sum(target_binary != ref_matrix, axis=1)
@@ -89,7 +94,9 @@ class HashAccelerator:
             
         except Exception as e:
             logger.error(f"计算汉明距离失败: {e}")
-            return np.array([])    @staticmethod
+            return np.array([])
+
+    @staticmethod
     def find_similar_hashes(target_hash: str, ref_hashes: List[str], 
                           hash_to_uri: Dict[str, str], threshold: int, 
                           target_uri: Optional[str] = None) -> List[Tuple[str, str, int]]:
@@ -108,8 +115,8 @@ class HashAccelerator:
         try:
             # 计算所有汉明距离
             distances = HashAccelerator.calculate_hamming_distances(target_hash, ref_hashes)
-            # if distances.size == 0:
-            #     return []
+            if distances.size == 0:
+                return []
                 
             # 找出所有小于等于阈值的索引
             similar_indices = np.where(distances <= threshold)[0]
@@ -150,8 +157,8 @@ class HashAccelerator:
         try:
             # 预处理参考哈希矩阵
             ref_matrix = HashAccelerator.preprocess_hash_list(ref_hashes)
-            # if ref_matrix.size == 0:
-            #     return {}
+            if ref_matrix.size == 0:
+                return {}
                 
             results = {}
             for target_hash in target_hashes:
