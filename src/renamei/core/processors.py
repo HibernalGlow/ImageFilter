@@ -67,20 +67,20 @@ class AdImageDetector:
                 
                 if 'ad_keywords' in config:
                     self.ad_keywords = config['ad_keywords']
-                    logger.info(f"从配置文件 {config_path} 加载了 {len(self.ad_keywords)} 个广告关键词")
+                    # logger.info(f"从配置文件 {config_path} 加载了 {len(self.ad_keywords)} 个广告关键词")
                 
                 if 'ad_regex_patterns' in config:
                     self.ad_regex_patterns = config['ad_regex_patterns']
-                    logger.info(f"从配置文件 {config_path} 加载了 {len(self.ad_regex_patterns)} 个广告正则模式")
+                    # logger.info(f"从配置文件 {config_path} 加载了 {len(self.ad_regex_patterns)} 个广告正则模式")
                 
                 # 向后兼容，支持旧版配置
                 elif 'ad_patterns' in config:
                     self.ad_keywords = config['ad_patterns']
-                    logger.info(f"从配置文件 {config_path} 加载了 {len(self.ad_keywords)} 个广告匹配模式（旧版格式）")
+                    # logger.info(f"从配置文件 {config_path} 加载了 {len(self.ad_keywords)} 个广告匹配模式（旧版格式）")
                 
                 if 'image_extensions' in config:
                     self.image_extensions = set(config['image_extensions'])
-                    logger.info(f"从配置文件 {config_path} 加载了 {len(self.image_extensions)} 个图片扩展名")
+                    # logger.info(f"从配置文件 {config_path} 加载了 {len(self.image_extensions)} 个图片扩展名")
                 
                 # 加载阈值配置
                 if 'thresholds' in config:

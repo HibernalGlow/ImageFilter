@@ -384,11 +384,9 @@ name = "imagefilter"
 version = "2.0.1"
 source = { editable = "." }
 dependencies = [
-    { name = "dghs-imgutils" },
     { name = "imagehash" },
     { name = "loguru" },
     { name = "numpy" },
-    { name = "onnxruntime-gpu" },
     { name = "opencc-python-reimplemented" },
     { name = "orjson" },
     { name = "pathlib" },
@@ -418,18 +416,28 @@ dev = [
     { name = "pytest" },
     { name = "ruff" },
 ]
+full = [
+    { name = "dghs-imgutils" },
+    { name = "onnxruntime-gpu" },
+]
+gpu = [
+    { name = "dghs-imgutils" },
+    { name = "onnxruntime-gpu" },
+]
 
 [package.metadata]
 requires-dist = [
     { name = "black", marker = "extra == 'dev'", specifier = ">=23.0.0" },
-    { name = "dghs-imgutils" },
+    { name = "dghs-imgutils", marker = "extra == 'full'" },
+    { name = "dghs-imgutils", marker = "extra == 'gpu'" },
     { name = "imagehash" },
     { name = "isort", marker = "extra == 'dev'", specifier = ">=5.12.0" },
     { name = "loguru", specifier = ">=0.6.0" },
     { name = "loguru", specifier = ">=0.7.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0.0" },
     { name = "numpy" },
-    { name = "onnxruntime-gpu" },
+    { name = "onnxruntime-gpu", marker = "extra == 'full'" },
+    { name = "onnxruntime-gpu", marker = "extra == 'gpu'" },
     { name = "opencc-python-reimplemented" },
     { name = "orjson", specifier = ">=3.10.18" },
     { name = "pathlib", specifier = ">=1.0.1" },
@@ -452,7 +460,7 @@ requires-dist = [
     { name = "typer", specifier = ">=0.15.4" },
     { name = "typing-extensions", specifier = ">=4.7.0" },
 ]
-provides-extras = ["dev"]
+provides-extras = ["dev", "full", "gpu"]
 
 [[package]]
 name = "imagehash"
