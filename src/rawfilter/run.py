@@ -9,7 +9,6 @@ from typing import List, Dict, Set, Tuple, Optional, Union
 from PIL import Image
 from hashu.core.calculate_hash_custom import ImageClarityEvaluator
 from loguru import logger
-from .core import shorten_number_cn
 from .utils import (
     clean_filename, is_in_blacklist, is_chinese_version, has_original_keywords,
     handle_multi_main_file, create_shortcut, safe_move_file, group_similar_files
@@ -87,6 +86,68 @@ def calculate_representative_width(archive_path: str, sample_count: int = 3) -> 
     except Exception as e:
         logger.info("[#error_log] ❌ 计算代表宽度失败 %s: %s", archive_path, str(e))
         return 0
+def shorten_number_cn(
+    number: int, 
+    precision: int = 1,
+    use_w: bool = True
+) -> str:
+    """
+    将大数字转换为中文习惯的缩写格式
+    
+    Args:
+        number: 要转换的数字
+        precision: 小数位精度（默认1位）
+        use_w: 是否使用"万"为单位（True时万进制，False时千进制）
+    
+    Returns:
+        str: 格式化后的字符串
+        
+    Examples:
+        >>> shorten_number_cn(18500)
+        '1.8w'
+        >>> shorten_number_cn(215_0000)
+        '215w'
+        >>> shorten_number_cn(3_5000_0000)
+        '3.5亿'
+    """
+    number=round(number)
+    if number < 1000:
+        return str(number)
+        
+    if use_w:
+        # 万进制处理
+        if number >= 1_0000_0000:
+            # 亿单位处理
+            value = number / 1_0000_0000
+            unit = '亿'
+        elif number >= 1_0000:
+            # 万单位处理
+            value = number / 1_0000
+            unit = 'w'
+        else:
+            # 千单位处理（当小于1万时）
+            value = number / 1000
+            unit = 'k'
+    else:
+        # 千进制处理
+        if number >= 1_000_000_000:
+            value = number / 1_000_000_000
+            unit = 'B'
+        elif number >= 1_000_000:
+            value = number / 1_000_000
+            unit = 'M'
+        else:
+            value = number / 1000
+            unit = 'k'
+
+    # 处理精度
+    if value == int(value):
+        # 整数情况省略小数部分
+        return f"{int(value)}{unit}"
+    else:
+        # 保留指定位数小数
+        return f"{value:.{precision}f}{unit}".rstrip('0').rstrip('.') 
+
 
 class ReportGenerator:
     """生成处理报告的类"""
@@ -165,7 +226,7 @@ def process_file_with_count(file_path: str) -> Tuple[str, str, Dict[str, Union[i
     import re, os, zipfile, random
     from PIL import Image
     from hashu.core.calculate_hash_custom import ImageClarityEvaluator
-    from rawfilter.core import shorten_number_cn
+    from rawfilter.run import shorten_number_cn
     from loguru import logger
     full_path = file_path
     dir_name = os.path.dirname(file_path)
@@ -206,7 +267,7 @@ def process_file_with_count(file_path: str) -> Tuple[str, str, Dict[str, Union[i
 
 def process_file_group(group_files: List[str], base_dir: str, trash_dir: str, create_shortcuts: bool = False, enable_multi_main: bool = False) -> Dict:
     from .utils import clean_filename, is_in_blacklist, is_chinese_version, has_original_keywords, handle_multi_main_file, create_shortcut, safe_move_file
-    from rawfilter.core import shorten_number_cn
+    from rawfilter.run import shorten_number_cn
     from loguru import logger
     result_stats = {'moved_to_trash': 0, 'moved_to_multi': 0, 'created_shortcuts': 0}
     group_base_name, _ = clean_filename(group_files[0])

@@ -4,6 +4,21 @@ from loguru import logger
 import win32com.client
 from typing import List, Optional
 import shutil
+import re
+def clean_filename(self, filename: str) -> str:
+    """清理文件名，只保留主文件名部分进行比较"""
+    # 移除扩展名
+    name = os.path.splitext(filename)[0]
+    
+    # 移除所有括号内容和指标信息
+    name = re.sub(r'\[[^\]]*\]|\([^)]*\)|\{[^}]*\}', '', name)
+    
+    # 移除特殊字符和多余空格
+    name = re.sub(r'[^\w\s\-]', '', name)
+    name = re.sub(r'\s+', '', name)
+    
+    return name.strip().lower()
+
 
 def get_paths_from_clipboard():
     """从剪贴板读取多行路径"""
