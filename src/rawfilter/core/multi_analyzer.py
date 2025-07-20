@@ -613,48 +613,25 @@ def main():
         # 如果有命令行参数，直接运行Typer应用
         app()
     else:
-        # 使用rich_preset配置界面
+        # 使用 lata cli 启动 taskfile 界面
         try:
-            from rich_preset import create_config_app
-            
-            result = create_config_app(
-                program=sys.argv[0],
-                title="Multi文件分析器配置",
-                command={
-                    "name": "analyze",  # 对应@app.command()下的函数名
-                    "help": "分析压缩包文件的宽度、页数和清晰度"
-                },
-                options=[
-                    {"name": "--clipboard", "flag": "-c", "help": "从剪贴板读取路径", "is_flag": True},
-                    {"name": "--sample-count", "flag": "-s", "help": "每个压缩包抽取的图片样本数量", "type": int, "default": 3},
-                    {"name": "--rename", "flag": "-r", "help": "执行重命名操作", "is_flag": True},
-                    {"name": "--no-skip-special", "help": "不跳过trash和multi目录", "is_flag": True},
-                    {"name": "--output", "flag": "-o", "help": "保存结果的文件路径"}
-                ],
-                arguments=[
-                    {"name": "input_path", "help": "输入文件或目录路径", "required": False}
-                ],
-                preset_configs=preset_configs
+            import subprocess
+            from pathlib import Path
+
+            # 获取当前包目录（rawfilter 目录）
+            script_dir = Path(__file__).parent.parent
+
+            # 启动 lata cli
+            result = subprocess.run(
+                "lata",
+                cwd=script_dir
             )
-            
-            if result:
-                # 将rich_preset的结果转换为兼容run_application的格式
-                class Args:
-                    pass
-                
-                args = Args()
-                args.input_path = result.args.get("input_path")
-                args.clipboard = result.args.get("clipboard", False)
-                args.sample_count = result.args.get("sample_count", 3)
-                args.rename = result.args.get("rename", False)
-                args.no_skip_special = result.args.get("no_skip_special", False)
-                args.output = result.args.get("output")
-                
-                run_application(args)
-            else:
-                print("操作已取消")
-        except ImportError:
-            print("未安装rich_preset模块，将使用命令行模式")
+
+            return result.returncode
+
+        except Exception as e:
+            print(f"启动 lata cli 失败: {e}")
+            print("将使用命令行模式")
             app()
 
 def run_application(args):
@@ -780,48 +757,25 @@ def main():
         # 如果有命令行参数，直接运行Typer应用
         app()
     else:
-        # 使用rich_preset配置界面
+        # 使用 lata cli 启动 taskfile 界面
         try:
-            from rich_preset import create_config_app
-            
-            result = create_config_app(
-                program=sys.argv[0],
-                title="Multi文件分析器配置",
-                command={
-                    "name": "analyze",  # 对应@app.command()下的函数名
-                    "help": "分析压缩包文件的宽度、页数和清晰度"
-                },
-                options=[
-                    {"name": "--clipboard", "flag": "-c", "help": "从剪贴板读取路径", "is_flag": True},
-                    {"name": "--sample-count", "flag": "-s", "help": "每个压缩包抽取的图片样本数量", "type": int, "default": 3},
-                    {"name": "--rename", "flag": "-r", "help": "执行重命名操作", "is_flag": True},
-                    {"name": "--no-skip-special", "help": "不跳过trash和multi目录", "is_flag": True},
-                    {"name": "--output", "flag": "-o", "help": "保存结果的文件路径"}
-                ],
-                arguments=[
-                    {"name": "input_path", "help": "输入文件或目录路径", "required": False}
-                ],
-                preset_configs=preset_configs
+            import subprocess
+            from pathlib import Path
+
+            # 获取当前包目录（rawfilter 目录）
+            script_dir = Path(__file__).parent.parent
+
+            # 启动 lata cli
+            result = subprocess.run(
+                "lata",
+                cwd=script_dir
             )
-            
-            if result:
-                # 将rich_preset的结果转换为兼容run_application的格式
-                class Args:
-                    pass
-                
-                args = Args()
-                args.input_path = result.args.get("input_path")
-                args.clipboard = result.args.get("clipboard", False)
-                args.sample_count = result.args.get("sample_count", 3)
-                args.rename = result.args.get("rename", False)
-                args.no_skip_special = result.args.get("no_skip_special", False)
-                args.output = result.args.get("output")
-                
-                run_application(args)
-            else:
-                print("操作已取消")
-        except ImportError:
-            print("未安装rich_preset模块，将使用命令行模式")
+
+            return result.returncode
+
+        except Exception as e:
+            print(f"启动 lata cli 失败: {e}")
+            print("将使用命令行模式")
             app()
 
 if __name__ == '__main__':

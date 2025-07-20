@@ -28,24 +28,17 @@ from typing import List, Dict, Set, Tuple, Optional, Union
 from opencc import OpenCC  # 用于繁简转换
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from hashu.core.calculate_hash_custom import ImageClarityEvaluator
-from textual_logger import TextualLoggerManager
+# from textual_logger import TextualLoggerManager
 from rawfilter.core.number_shortener import shorten_number_cn
 import json
 from rawfilter.core.group_analyzer import GroupAnalyzer
 
 from loguru import logger
+from loguru import logger
 import os
 import sys
 from pathlib import Path
 from datetime import datetime
-
-# 进程初始化函数，确保每个子进程都有正确的日志配置
-def init_worker_process():
-    """为每个工作进程初始化日志配置"""
-    global logger
-    # 获取当前模块的路径作为project_root
-    module_path = Path(__file__).parent.resolve()
-    logger, _ = setup_logger(app_name="no_translate_find", project_root=module_path, console_output=False)
 
 def setup_logger(app_name="app", project_root=None, console_output=True):
     """配置 Loguru 日志系统
@@ -84,10 +77,7 @@ def setup_logger(app_name="app", project_root=None, console_output=True):
     # 构建日志目录和文件路径
     log_dir = os.path.join(project_root, "logs", app_name, date_str, hour_str)
     os.makedirs(log_dir, exist_ok=True)
-    
-    # 添加进程ID以确保唯一性
-    process_id = os.getpid()
-    log_file = os.path.join(log_dir, f"{minute_str}_{process_id}.log")
+    log_file = os.path.join(log_dir, f"{minute_str}.log")
     
     # 添加文件处理器
     logger.add(
@@ -98,6 +88,7 @@ def setup_logger(app_name="app", project_root=None, console_output=True):
         compression="zip",
         encoding="utf-8",
         format="{time:YYYY-MM-DD HH:mm:ss} | {elapsed} | {level.icon} {level: <8} | {name}:{function}:{line} - {message}",
+        enqueue=True
     )
     
     # 创建配置信息字典
@@ -105,10 +96,13 @@ def setup_logger(app_name="app", project_root=None, console_output=True):
         'log_file': log_file,
     }
     
-    logger.info(f"日志系统已初始化，应用名称: {app_name}")
+    logger.info("日志系统已初始化，应用名称: {}", app_name)
     return logger, config_info
+    
+logger, config_info = setup_logger(app_name="rawfilter", console_output=True)
+    
 
-logger, config_info = setup_logger(app_name="no_translate_find", console_output=True)
+# 进程初始化函数，确保每个子进程都有正确的日志配置
 
     # 设置Textual日志布局
 TEXTUAL_LAYOUT = {
@@ -118,8 +112,8 @@ TEXTUAL_LAYOUT = {
         "style": "lightgreen"
     },
     "process": {
-        "ratio": 2, 
-        "title": "🔄 进度",
+        "ratio": 2,
+        "title": "🔄 处理进度",
         "style": "lightcyan",
     },
     "file_ops": {
@@ -230,7 +224,7 @@ class ReportGenerator:
                 f.write(report_content)
             return report_path
         except Exception as e:
-            logger.error("[#error_log] ❌ 保存报告失败: %s", str(e))
+            logger.error("[#error_log] ❌ 保存报告失败: {}", str(e))
             logger.exception("[#error_log] 异常堆栈:")  # 自动记录堆栈信息
             # 在界面显示错误详情
             logger.info("[#process] 💥 遇到严重错误，请检查error_log面板")
@@ -390,7 +384,7 @@ def group_similar_files(files: List[str]) -> Dict[str, List[str]]:
     for file in files:
         # 检查文件是否在黑名单中
         if is_in_blacklist(file):
-            logger.info("[#file_ops] ⏭️ 跳过黑名单文件: %s", file)
+            logger.info("[#file_ops] ⏭️ 跳过黑名单文件: {}", file)
             continue
             
         clean_name, _ = clean_filename(file)
@@ -450,10 +444,10 @@ def get_image_count(archive_path: str) -> int:
                     return count
             
             # 如果7z也失败了，记录错误并返回0
-            logger.error("[#error_log] ❌ 无法打开压缩文件 %s", archive_path)
+            logger.error("[#error_log] ❌ 无法打开压缩文件 {}", archive_path)
             return 0
     except Exception as e:
-        logger.error("[#error_log] ❌ 统计图片数量失败 %s: %s", archive_path, str(e))
+        logger.error("[#error_log] ❌ 统计图片数量失败 {}: {}", archive_path, str(e))
         return 0
 def get_sample_images(archive_path: str, temp_dir: str, sample_count: int = 3) -> List[str]:
     """从压缩包中提取样本图片到临时目录"""
@@ -496,7 +490,7 @@ def get_sample_images(archive_path: str, temp_dir: str, sample_count: int = 3) -
             return extracted_files
             
     except Exception as e:
-        logger.error("[#error_log] ❌ 提取样本图片失败 %s: %s", archive_path, str(e))
+        logger.error("[#error_log] ❌ 提取样本图片失败 {}: {}", archive_path, str(e))
         return []
 
 def calculate_representative_width(archive_path: str, sample_count: int = 3) -> int:
@@ -515,7 +509,7 @@ def calculate_representative_width(archive_path: str, sample_count: int = 3) -> 
                     if os.path.splitext(info.filename.lower())[1] in IMAGE_EXTENSIONS:
                         image_files.append((info.filename, info.file_size))
         except zipfile.BadZipFile:
-            logger.info("[#error_log] ⚠️ 无效的ZIP文件: %s", archive_path)
+            logger.info("[#error_log] ⚠️ 无效的ZIP文件: {}", archive_path)
             return 0
 
         if not image_files:
@@ -549,10 +543,10 @@ def calculate_representative_width(archive_path: str, sample_count: int = 3) -> 
                             with Image.open(io.BytesIO(img_data)) as img:
                                 widths.append(img.width)
                     except Exception as e:
-                        logger.info("[#error_log] ⚠️ 读取图片宽度失败 %s: %s", sample, str(e))
+                        logger.info("[#error_log] ⚠️ 读取图片宽度失败 {}: {}", sample, str(e))
                         continue
         except Exception as e:
-            logger.info("[#error_log] ⚠️ 打开ZIP文件失败: %s", str(e))
+            logger.info("[#error_log] ⚠️ 打开ZIP文件失败: {}", str(e))
             return 0
 
         if not widths:
@@ -562,7 +556,7 @@ def calculate_representative_width(archive_path: str, sample_count: int = 3) -> 
         return int(sorted(widths)[len(widths)//2])
 
     except Exception as e:
-        logger.info("[#error_log] ❌ 计算代表宽度失败 %s: %s", archive_path, str(e))
+        logger.info("[#error_log] ❌ 计算代表宽度失败 {}: {}", archive_path, str(e))
         return 0
 
 def extract_width_from_filename(filename: str) -> int:
@@ -595,12 +589,12 @@ def safe_move_file(src_path: str, dst_path: str, max_retries: int = 3, delay: fl
     
     # 确保源文件存在
     if not os.path.exists(src_path):
-        logger.info("[#error_log] ❌ 源文件不存在: %s", src_path)
+        logger.info("[#error_log] ❌ 源文件不存在: {}", src_path)
         return False
-        
+
     # 确保源文件可读
     if not os.access(src_path, os.R_OK):
-        logger.info("[#error_log] ❌ 源文件无法读取: %s", src_path)
+        logger.info("[#error_log] ❌ 源文件无法读取: {}", src_path)
         return False
         
     # 确保目标目录存在
@@ -608,19 +602,19 @@ def safe_move_file(src_path: str, dst_path: str, max_retries: int = 3, delay: fl
     try:
         os.makedirs(dst_dir, exist_ok=True)
     except Exception as e:
-        logger.info("[#error_log] ❌ 创建目标目录失败: %s, 错误: %s", dst_dir, str(e))
+        logger.info("[#error_log] ❌ 创建目标目录失败: {}, 错误: {}", dst_dir, str(e))
         return False
-        
+
     # 检查目标目录是否可写
     if not os.access(dst_dir, os.W_OK):
-        logger.info("[#error_log] ❌ 目标目录无写入权限: %s", dst_dir)
+        logger.info("[#error_log] ❌ 目标目录无写入权限: {}", dst_dir)
         return False
         
     # 获取源文件大小
     try:
         src_size = os.path.getsize(src_path)
     except Exception as e:
-        logger.info("[#error_log] ❌ 无法获取源文件大小: %s, 错误: %s", src_path, str(e))
+        logger.info("[#error_log] ❌ 无法获取源文件大小: {}, 错误: {}", src_path, str(e))
         return False
         
     # 重试机制
@@ -632,7 +626,7 @@ def safe_move_file(src_path: str, dst_path: str, max_retries: int = 3, delay: fl
                     os.remove(dst_path)
                 except Exception as e:
                     # 记录错误但继续尝试移动
-                    logger.info("[#error_log] ⚠️ 无法删除已存在的目标文件: %s, 错误: %s", dst_path, str(e))
+                    logger.info("[#error_log] ⚠️ 无法删除已存在的目标文件: {}, 错误: {}", dst_path, str(e))
                     # 尝试使用其他方式处理
                     try:
                         # 1. 尝试使用临时文件名
@@ -642,7 +636,7 @@ def safe_move_file(src_path: str, dst_path: str, max_retries: int = 3, delay: fl
                         os.replace(temp_dst_path, dst_path)
                         return True
                     except Exception as move_error:
-                        logger.info("[#error_log] ⚠️ 使用临时文件移动失败: %s", str(move_error))
+                        logger.info("[#error_log] ⚠️ 使用临时文件移动失败: {}", str(move_error))
                         # 如果不是最后一次尝试，继续重试
                         if attempt < max_retries - 1:
                             time.sleep(delay)
@@ -665,14 +659,14 @@ def safe_move_file(src_path: str, dst_path: str, max_retries: int = 3, delay: fl
             
         except Exception as e:
             if attempt < max_retries - 1:
-                logger.info("[#error_log] ⚠️ 移动文件失败，尝试重试 (%d/%d): %s", attempt + 1, max_retries, str(e))
+                logger.info("[#error_log] ⚠️ 移动文件失败，尝试重试 ({}/{}): {}", attempt + 1, max_retries, str(e))
                 time.sleep(delay)
                 continue
             else:
-                logger.info("[#error_log] ❌ 移动文件失败，已达到最大重试次数: %s", str(e))
+                logger.info("[#error_log] ❌ 移动文件失败，已达到最大重试次数: {}", str(e))
                 # 如果最后一次尝试失败，检查源文件是否还存在
                 if not os.path.exists(src_path):
-                    logger.info("[#error_log] ❌ 源文件已不存在: %s", src_path)
+                    logger.info("[#error_log] ❌ 源文件已不存在: {}", src_path)
                 return False
                 
     return False
@@ -719,7 +713,7 @@ def process_file_with_count(file_path: str) -> Tuple[str, str, Dict[str, Union[i
                 metrics['clarity_score'] = sum(scores) / len(scores) if scores else 0.0
                 
     except Exception as e:
-        logger.error("[#error_log] 清晰度计算失败 %s: %s", file_path, str(e))
+        logger.error("[#error_log] 清晰度计算失败 {}: {}", file_path, str(e))
     
     # 生成属性字符串，所有属性放在一个大括号内
     parts = []
@@ -754,7 +748,7 @@ def process_file_group(group_files: List[str], base_dir: str, trash_dir: str, cr
     # 过滤掉黑名单文件
     filtered_files = [f for f in group_files if not is_in_blacklist(f)]
     if not filtered_files:
-        logger.info("[#group_info] ⏭️ 组[%s]跳过: 所有文件都在黑名单中", group_base_name)
+        logger.info("[#group_info] ⏭️ 组[{}]跳过: 所有文件都在黑名单中", group_base_name)
         return result_stats
         
     # 分离汉化版本和其他版本，并使用完整路径
@@ -776,7 +770,7 @@ def process_file_group(group_files: List[str], base_dir: str, trash_dir: str, cr
         if original_keyword_versions:
             chinese_versions.extend(original_keyword_versions)
             other_versions = [f for f in other_versions if not has_original_keywords(os.path.basename(f))]
-            logger.info(f"[#file_ops] 📝 将{len(original_keyword_versions)}个包含原版关键词的文件归入保留列表")
+            logger.info("[#file_ops] 📝 将{}个包含原版关键词的文件归入保留列表", len(original_keyword_versions))
     
     # 为每个文件添加图片数量标记和计算宽度
     processed_files = []
@@ -847,9 +841,9 @@ def process_file_group(group_files: List[str], base_dir: str, trash_dir: str, cr
         try:
             os.rename(old_full_path, new_full_path)
             updated_files.append((old_path, new_path))
-            logger.info(f"[#file_ops] ✅ 已重命名: {old_path} -> {new_path}")
+            logger.info("[#file_ops] ✅ 已重命名: {} -> {}", old_path, new_path)
         except Exception as e:
-            logger.error(f"[#error_log] ❌ 重命名失败 {old_path}: {str(e)}")
+            logger.error("[#error_log] ❌ 重命名失败 {}: {}", old_path, str(e))
             updated_files.append((old_path, old_path))
     
     # 更新文件路径
@@ -868,7 +862,7 @@ def process_file_group(group_files: List[str], base_dir: str, trash_dir: str, cr
             if enable_multi_main:
                 main_file = max(chinese_versions, key=lambda x: os.path.getsize(os.path.join(base_dir, x)))
                 if handle_multi_main_file(main_file, base_dir):
-                    logger.info(f"[#file_ops] ✅ 已处理multi-main文件: {main_file}")
+                    logger.info("[#file_ops] ✅ 已处理multi-main文件: {}", main_file)
             
             # 移动所有文件到multi目录
             for file in chinese_versions:
@@ -876,7 +870,7 @@ def process_file_group(group_files: List[str], base_dir: str, trash_dir: str, cr
                 rel_path = os.path.relpath(src_path, base_dir)
                 dst_path = os.path.join(multi_dir, rel_path)
                 if safe_move_file(src_path, dst_path):
-                    logger.info(f"[#file_ops] ✅ 已移动到multi: {file}")
+                    logger.info("[#file_ops] ✅ 已移动到multi: {}", file)
                     result_stats['moved_to_multi'] += 1
             
             # 移动其他非原版到trash
@@ -887,15 +881,15 @@ def process_file_group(group_files: List[str], base_dir: str, trash_dir: str, cr
                 if create_shortcuts:
                     shortcut_path = os.path.splitext(dst_path)[0]
                     if create_shortcut(src_path, shortcut_path):
-                        logger.info(f"[#file_ops] ✅ 已创建快捷方式: {other_file}")
+                        logger.info("[#file_ops] ✅ 已创建快捷方式: {}", other_file)
                         result_stats['created_shortcuts'] += 1
                 else:
                     if safe_move_file(src_path, dst_path):
-                        logger.info(f"[#file_ops] ✅ 已移动到trash: {other_file}")
+                        logger.info("[#file_ops] ✅ 已移动到trash: {}", other_file)
                         result_stats['moved_to_trash'] += 1
         else:
             # 只有一个需要保留的版本
-            logger.info(f"[#group_info] 🔍 组[{group_base_name}]处理: 发现1个需要保留的版本，保持原位置")
+            logger.info("[#group_info] 🔍 组[{}]处理: 发现1个需要保留的版本，保持原位置", group_base_name)
             # 移动其他版本到trash
             for other_file in other_versions:
                 src_path = os.path.join(base_dir, other_file)
@@ -904,11 +898,11 @@ def process_file_group(group_files: List[str], base_dir: str, trash_dir: str, cr
                 if create_shortcuts:
                     shortcut_path = os.path.splitext(dst_path)[0]
                     if create_shortcut(src_path, shortcut_path):
-                        logger.info(f"[#file_ops] ✅ 已创建快捷方式: {other_file}")
+                        logger.info("[#file_ops] ✅ 已创建快捷方式: {}", other_file)
                         result_stats['created_shortcuts'] += 1
                 else:
                     if safe_move_file(src_path, dst_path):
-                        logger.info(f"[#file_ops] ✅ 已移动到trash: {other_file}")
+                        logger.info("[#file_ops] ✅ 已移动到trash: {}", other_file)
                         result_stats['moved_to_trash'] += 1
     else:
         # 没有汉化版本的情况
@@ -922,7 +916,7 @@ def process_file_group(group_files: List[str], base_dir: str, trash_dir: str, cr
                 main_file = max(other_versions, key=lambda x: os.path.getsize(os.path.join(base_dir, x)))
                 # 创建主文件的副本
                 if handle_multi_main_file(main_file, base_dir):
-                    logger.info(f"[#file_ops] ✅ 已处理multi-main文件: {main_file}")
+                    logger.info("[#file_ops] ✅ 已处理multi-main文件: {}", main_file)
             
             # 移动所有文件到multi目录
             for file in other_versions:
@@ -930,12 +924,12 @@ def process_file_group(group_files: List[str], base_dir: str, trash_dir: str, cr
                 rel_path = os.path.relpath(src_path, base_dir)
                 dst_path = os.path.join(multi_dir, rel_path)
                 if safe_move_file(src_path, dst_path):
-                    logger.info(f"[#file_ops] ✅ 已移动到multi: {file}")
+                    logger.info("[#file_ops] ✅ 已移动到multi: {}", file)
                     result_stats['moved_to_multi'] += 1
-            logger.info(f"[#group_info] 🔍 组[{group_base_name}]处理: 未发现汉化版本，发现{len(other_versions)}个原版，已移动到multi")
+            logger.info("[#group_info] 🔍 组[{}]处理: 未发现汉化版本，发现{}个原版，已移动到multi", group_base_name, len(other_versions))
         else:
             # 单个原版，保持原位置
-            logger.info(f"[#group_info] 🔍 组[{group_base_name}]处理: 未发现汉化版本，仅有1个原版，保持原位置")
+            logger.info("[#group_info] 🔍 组[{}]处理: 未发现汉化版本，仅有1个原版，保持原位置", group_base_name)
     
     return result_stats
 
@@ -948,33 +942,37 @@ def process_directory(directory: str, report_generator: ReportGenerator, dry_run
     
     # 收集所有压缩文件
     all_files = []
-    logger.info("[#process] 🔍 正在扫描文件...")
-    
+    logger.info("[#process] 🔍 开始扫描目录: {}", directory)
+
     for root, _, files in os.walk(directory):
         # 跳过trash和multi目录
         if 'trash' in root or 'multi' in root:
-            logger.info("[#file_ops] ⏭️ 跳过目录: %s", root)
+            logger.info("[#file_ops] ⏭️ 跳过目录: {}", root)
             continue
-            
+
         for file in files:
             # 使用新定义的ARCHIVE_EXTENSIONS
             if os.path.splitext(file.lower())[1] in ARCHIVE_EXTENSIONS:
                 rel_path = os.path.relpath(os.path.join(root, file), directory)
                 all_files.append(rel_path)
-                # 更新扫描进度
-                logger.info("[@process] 扫描进度: %d/%d", len(all_files), len(all_files))
+                # 每10个文件更新一次扫描进度
+                if len(all_files) % 10 == 0:
+                    logger.info("[#process] 📁 已扫描到 {} 个压缩文件", len(all_files))
     
     if not all_files:
-        logger.info("[#error_log] ⚠️ 目录 %s 中未找到压缩文件", directory)
+        logger.info("[#error_log] ⚠️ 目录 {} 中未找到压缩文件", directory)
         return
-        
+
+    logger.info("[#process] ✅ 扫描完成，共找到 {} 个压缩文件", len(all_files))
+
     # 更新报告统计
     report_generator.update_stats('total_files', len(all_files))
-    
+
     # 对文件进行分组
+    logger.info("[#process] 🔄 开始文件分组...")
     groups = group_similar_files(all_files)
-    logger.info("[#stats] 📊 总计: %d个文件, %d个组", len(all_files), len(groups))
-    
+    logger.info("[#stats] 📊 分组完成 - 总文件: {} 个，分组: {} 个", len(all_files), len(groups))
+
     # 更新报告统计
     report_generator.update_stats('total_groups', len(groups))
     
@@ -1009,9 +1007,9 @@ def process_directory(directory: str, report_generator: ReportGenerator, dry_run
                     if value > 0:
                         report_generator.update_stats(key, value)
             except Exception as e:
-                logger.error(f"[#error_log] ❌ 处理组时出错: {futures[future]}, 错误: {str(e)}")
-                
-            logger.info(f"[@stats] 组进度: ({completed}/{future_count}) {scan_percent:.2f}%")
+                logger.error("[#error_log] ❌ 处理组时出错: {}, 错误: {}", futures[future], str(e))
+
+            logger.info("[@stats] 组进度: ({}/{}) {:.2f}%", completed, future_count, scan_percent)
 
 def get_paths_from_clipboard():
     """从剪贴板读取多行路径"""
@@ -1034,14 +1032,14 @@ def get_paths_from_clipboard():
         ]
         
         if valid_paths:
-            logger.info("[#file_ops] 📋 从剪贴板读取到 %d 个有效路径", len(valid_paths))
+            logger.info("[#file_ops] 📋 从剪贴板读取到 {} 个有效路径", len(valid_paths))
         else:
             logger.info("[#error_log] ⚠️ 剪贴板中没有有效路径")
             
         return valid_paths
-        
+
     except Exception as e:
-        logger.info("[#error_log] ❌ 读取剪贴板时出错: %s", e)
+        logger.info("[#error_log] ❌ 读取剪贴板时出错: {}", e)
         return []
 
 def get_long_path_name(path_str: str) -> str:
@@ -1062,7 +1060,12 @@ def safe_path(path: str) -> str:
 
 def process_paths(paths: List[str]) -> List[str]:
     """处理输入的路径列表"""
-    # TextualLoggerManager.set_layout(TEXTUAL_LAYOUT,config_info['log_file'])
+    # 初始化TextualLogger
+    try:
+        # TextualLoggerManager.set_layout(TEXTUAL_LAYOUT, config_info['log_file'])
+        logger.info("[#process] ✅ TextualLogger初始化完成")
+    except Exception as e:
+        logger.warning("[#process] ⚠️ TextualLogger初始化失败: {}", str(e))
 
     # 过滤掉空路径和引号
     valid_paths = []
@@ -1082,9 +1085,9 @@ def process_paths(paths: List[str]) -> List[str]:
                 if os.path.exists(safe_path_str):
                     valid_paths.append(safe_path_str)
                 else:
-                    logger.info("[#error_log] ❌ 路径不存在或无法访问: %s", path)
+                    logger.info("[#error_log] ❌ 路径不存在或无法访问: {}", path)
             except Exception as e:
-                logger.info("[#error_log] ❌ 处理路径时出错: %s, 错误: %s", path, str(e))
+                logger.info("[#error_log] ❌ 处理路径时出错: {}, 错误: {}", path, str(e))
     
     if not valid_paths:
         logger.info("[#error_log] ⚠️ 没有有效的路径")
@@ -1100,7 +1103,7 @@ def create_shortcut(src_path: str, dst_path: str) -> bool:
         shortcut.save()
         return True
     except Exception as e:
-        logger.error("[#error_log] 创建快捷方式失败: %s", str(e))
+        logger.error("[#error_log] 创建快捷方式失败: {}", str(e))
         return False
 
 def handle_multi_main_file(file_path: str, base_dir: str) -> Optional[str]:
@@ -1128,10 +1131,10 @@ def handle_multi_main_file(file_path: str, base_dir: str) -> Optional[str]:
         
         # 复制文件
         shutil.copy2(full_path, new_full_path)
-        logger.info("[#file_ops] ✅ 已创建multi-main副本: %s", new_rel_path)
+        logger.info("[#file_ops] ✅ 已创建multi-main副本: {}", new_rel_path)
         return new_rel_path
     except Exception as e:
-        logger.error("[#error_log] ❌ 创建multi-main副本失败 %s: %s", file_path, str(e))
+        logger.error("[#error_log] ❌ 创建multi-main副本失败 {}: {}", file_path, str(e))
         return None
 
 def setup_cli_parser():
@@ -1192,14 +1195,14 @@ def run_application(args):
     
     # 处理每个路径
     for path in valid_paths:
-        logger.info("[#process] 🚀 开始处理目录: %s", path)
+        logger.info("[#process] 🚀 开始处理目录: {}", path)
         process_directory(
             path,
             report_generator,
             create_shortcuts=args.create_shortcuts if hasattr(args, 'create_shortcuts') else False,
             enable_multi_main=args.enable_multi_main if hasattr(args, 'enable_multi_main') else False
         )
-        logger.info("[#process] ✨ 目录处理完成: %s", path)
+        logger.info("[#process] ✨ 目录处理完成: {}", path)
         
         # 生成并保存报告
         if hasattr(args, 'report') and args.report:
@@ -1208,7 +1211,7 @@ def run_application(args):
             report_path = report_generator.save_report(path)
             
         if report_path:
-            logger.info("[#process] 📝 报告已保存到: %s", report_path)
+            logger.info("[#process] 📝 报告已保存到: {}", report_path)
         else:
             logger.info("[#error_log] ❌ 保存报告失败")
     
@@ -1219,31 +1222,6 @@ def main():
     parser = setup_cli_parser()
     
     # 创建预设配置
-    preset_configs = {
-        "基本模式": {
-            "description": "从剪贴板读取路径，执行标准处理",
-            "checkbox_options": ["--clipboard"],
-            "input_values": {}
-        },
-        "快捷方式模式": {
-            "description": "创建快捷方式而不是移动文件",
-            "checkbox_options": ["--clipboard", "--create-shortcuts"],
-            "input_values": {}
-        },
-        "多文件保留模式": {
-            "description": "为每个multi组创建主文件副本",
-            "checkbox_options": ["--clipboard", "--enable-multi-main"],
-            "input_values": {}
-        },
-        "完整模式": {
-            "description": "启用所有高级功能",
-            "checkbox_options": ["--clipboard", "--create-shortcuts", "--enable-multi-main"],
-            "input_values": {
-                "--sample-count": "5"
-            }
-        }
-    }
-    
     # 检查是否有命令行参数
     has_args = len(sys.argv) > 1
     
@@ -1252,20 +1230,27 @@ def main():
         args = parser.parse_args(sys.argv[1:])
         run_application(args)
     else:
-        # 使用rich_preset配置界面
-        from rich_preset import create_config_app
-        
-        result = create_config_app(
-            program=sys.argv[0],
-            title="文件去重工具配置",
-            parser=parser,
-            preset_configs=preset_configs
-        )
-        
-        if result:
-            run_application(result.args)
-        else:
-            print("操作已取消")
+        # 使用 lata cli 启动 taskfile 界面
+        try:
+            import subprocess
+            from pathlib import Path
+
+            # 获取当前包目录（rawfilter 目录）
+            script_dir = Path(__file__).parent
+
+            # 启动 lata cli
+            result = subprocess.run(
+                "lata",
+                cwd=script_dir
+            )
+
+            return result.returncode
+
+        except Exception as e:
+            print(f"启动 lata cli 失败: {e}")
+            print("请通过命令行参数运行。")
+            return 1
 
 if __name__ == "__main__":
+
     main()

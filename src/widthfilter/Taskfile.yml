@@ -1,0 +1,38 @@
+# https://taskfile.dev
+
+version: '3'
+
+vars:
+  PYTHON_CMD: widthfilter
+
+tasks:
+  default:
+    desc: "显示可用任务列表"
+    cmds:
+      - task --list
+    silent: true
+
+  default-preset:
+    desc: "默认配置 - 小于等于1800像素宽度"
+    cmds:
+      - "{{.PYTHON_CMD}} --preset 默认"
+
+  dual-group:
+    desc: "双重分组 - 按不同宽度范围分组"
+    cmds:
+      - "{{.PYTHON_CMD}} --preset 双重分组"
+
+  width-height:
+    desc: "宽高双重匹配 - 同时考虑宽度和高度"
+    cmds:
+      - "{{.PYTHON_CMD}} --preset 宽高双重匹配"
+
+  custom:
+    desc: "自定义配置 - 手动指定参数"
+    cmds:
+      - "{{.PYTHON_CMD}} {{.CLI_ARGS}}"
+
+  clipboard:
+    desc: "从剪贴板读取路径"
+    cmds:
+      - "{{.PYTHON_CMD}} --clipboard"

@@ -46,7 +46,7 @@
     "宽高双重匹配": {
         "description": "宽高双重匹配 - 同时考虑宽度和高度",
         "source_dir": "E:\\999EHV",
-        "target_dir": "E:\\Dimension",
+        "target_dir": "E:\\7EHV",
         "dimension_rules": [
             {
                 "min_width": 0,

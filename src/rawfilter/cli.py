@@ -94,17 +94,23 @@ def main():
         args = parser.parse_args(sys.argv[1:])
         run_application(args)
     else:
+        # 使用 lata cli 启动 taskfile 界面
         try:
-            from rich_preset import create_config_app
-            result = create_config_app(
-                program=sys.argv[0],
-                title="文件去重工具配置",
-                parser=parser,
-                preset_configs=preset_configs
+            import subprocess
+            from pathlib import Path
+
+            # 获取当前包目录（rawfilter 目录）
+            script_dir = Path(__file__).parent
+
+            # 启动 lata cli
+            result = subprocess.run(
+                "lata",
+                cwd=script_dir
             )
-            if result:
-                run_application(result.args)
-            else:
-                print("操作已取消")
-        except ImportError:
-            print("未安装 rich_preset，无法使用图形预设界面。请通过命令行参数运行。")
+
+            return result.returncode
+
+        except Exception as e:
+            print(f"启动 lata cli 失败: {e}")
+            print("请通过命令行参数运行。")
+            return 1

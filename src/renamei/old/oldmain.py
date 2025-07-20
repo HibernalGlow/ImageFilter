@@ -69,7 +69,7 @@ def setup_logger(app_name="app", project_root=None, console_output=True):
         compression="zip",
         encoding="utf-8",
         format="{time:YYYY-MM-DD HH:mm:ss} | {elapsed} | {level.icon} {level: <8} | {name}:{function}:{line} - {message}",
-    )
+        enqueue=True,     )
     
     # 创建配置信息字典
     config_info = {
