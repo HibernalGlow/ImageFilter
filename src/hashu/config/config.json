@@ -1,0 +1,37 @@
+{
+  "sqlite_databases": [
+    "E:/1BACKUP/ehv/config/hashu_database.db"
+  ],
+  "json_hash_files": [
+    "E:/1BACKUP/ehv/config/image_hashes_collection.json",
+    "E:/1BACKUP/ehv/config/image_hashes_global.json"
+  ],
+  "config_files": {
+    "hash_files_list": "E:/1BACKUP/ehv/config/hash_files_list.txt",
+    "cache_timeout": 1800,
+    "auto_backup_interval": 3600
+  },
+  "hash_params": {
+    "hash_size": 10,
+    "hash_version": 1,
+    "default_algorithm": "phash"
+  },
+  "multiprocess_config": {
+    "enable_auto_save": true,
+    "enable_global_cache": true,
+    "use_sqlite": true,
+    "sqlite_priority": true,
+    "max_workers": 4
+  },
+  "backup_config": {
+    "enable_backup": true,
+    "backup_interval_hours": 24,
+    "max_backup_files": 5,
+    "backup_directory": "E:/1BACKUP/ehv/config/backups"
+  },
+  "migration_config": {
+    "auto_migrate_json_to_sqlite": true,
+    "preserve_json_files": true,
+    "migration_log_file": "E:/1BACKUP/ehv/config/migration.log"
+  }
+}

@@ -1,0 +1,35 @@
+{
+    "ad_keywords": [
+        "招募",
+        "credit",
+        "广告",
+        "宣传",
+        "招新",
+        "绅士快乐",
+        "粉丝群",
+        "無邪気",
+        "testeng"
+    ],
+    "ad_regex_patterns": [
+        "[Cc]redit[s]",
+        "ver\\.\\d+\\.\\d+",
+        "YZv\\.\\d+\\.\\d+",
+        "z{3,}"
+    ],
+    "image_extensions": [
+        ".jpg", 
+        ".jpeg", 
+        ".png", 
+        ".gif", 
+        ".bmp", 
+        ".webp", 
+        ".avif", 
+        ".jxl", 
+        ".tiff", 
+        ".tif"
+    ],    
+    "thresholds": {
+        "max_delete_percentage": 0.5,
+        "description": "最大删除比例阈值：当广告图片占总图片数的比例超过此值时，将取消删除操作以防止误删除"
+    }
+}

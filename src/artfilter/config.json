@@ -1,0 +1,31 @@
+{
+    "default_params": {
+        "ref_hamming_distance": 8,
+        "hash_size": 10,
+        "filter_white_enabled": false
+    },
+    "worker_count": 2,
+    "force_update": false,
+    "textual_layout": {
+        "current_stats": {
+            "ratio": 2,
+            "title": "📊 总体进度",
+            "style": "lightyellow"
+        },
+        "current_progress": {
+            "ratio": 2,
+            "title": "🔄 当前进度",
+            "style": "lightcyan"
+        },
+        "process_log": {
+            "ratio": 3,
+            "title": "📝 处理日志",
+            "style": "lightpink"
+        },
+        "update_log": {
+            "ratio": 3,
+            "title": "ℹ️ 更新日志",
+            "style": "lightblue"
+        }
+    }
+} 

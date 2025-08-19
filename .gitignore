@@ -1,0 +1,30 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+/src/badzipfilter/archive_check_history.json
+/src/badzipfilter/logs
+*.log
+/src/badzfilter/archive_check_history.json
+/src/imgu/imgutils-main
+/src/imgfilter/detectors/text_image_cache.json
+ocr_cache.json
+text_image_cache.json
+
+src/badzfilter/archive_check_history.json
+phash_benchmark_report.html
+*.jpeg
+*.jpg
+*.png
+*.webp
+*.jxl
+*.avif
+*.heic
+*.heif
+/src/imgfilter/detectors/cv_text_image_cache.json

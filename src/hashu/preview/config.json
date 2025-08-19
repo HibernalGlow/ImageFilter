@@ -1,0 +1,34 @@
+{
+  "app_config": {
+    "title": "pHash 图片相似度分析",
+    "icon": "🔍",
+    "layout": "wide",
+    "max_images_display": 50,
+    "thumbnail_size": [150, 150],
+    "default_folder": "E:\\2EHV\\test"
+  },
+  "hash_presets": {
+    "快速测试": [8, 10],
+    "标准分析": [10, 12, 16],
+    "精细分析": [12, 16, 20, 24],
+    "全面分析": [8, 10, 12, 16, 20, 24, 32],
+    "超精细分析": [16, 20, 24, 32, 48, 64]
+  },
+  "available_sizes": [4, 6, 8, 10, 12, 16, 20, 24, 32, 48, 64],
+  "distance_thresholds": {
+    "very_similar": 5,
+    "similar": 15,
+    "different": 25
+  },
+  "image_extensions": [
+    ".jpg", ".jpeg", ".png", ".webp", 
+    ".bmp", ".gif", ".tiff", ".jxl", ".avif"
+  ],
+  "ui_colors": {
+    "primary": "#1f77b4",
+    "success": "#28a745",
+    "warning": "#ffc107",
+    "danger": "#dc3545",
+    "info": "#17a2b8"
+  }
+}

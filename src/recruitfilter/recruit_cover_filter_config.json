@@ -1,0 +1,40 @@
+{
+    "supported_extensions": [".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".avif", ".heic", ".heif", ".jxl"],
+    "script_config": {
+        "script_name": "recruit_cover_filter",
+        "console_enabled": false,
+        "backup": {
+            "enabled": false
+        },
+        "debug_mode": false
+    },
+    "textual_layout": {
+        "path_progress": {
+            "ratio": 2,
+            "title": "🔄 当前进度",
+            "style": "lightcyan"
+        },
+        "file_ops": {
+            "ratio": 4,
+            "title": "📂 文件操作",
+            "style": "lightpink"
+        },
+        "sys_log": {
+            "ratio": 3,
+            "title": "🔧 系统消息",
+            "style": "lightgreen"
+        }
+    },
+    "filter_config": {
+        "default_hamming_threshold": 16,
+        "default_workers": null,
+        "hash_process": {
+            "default_workers": 16,
+            "force_update": false
+        }
+    },
+    "extract_config": {
+        "temp_dir_prefix": "temp_",
+        "timestamp_format": "%Y%m%d_%H%M%S"
+    }
+}

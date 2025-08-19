@@ -1,0 +1,28 @@
+# https://taskfile.dev
+
+version: '3'
+
+vars:
+  PYTHON_CMD: renamei
+
+tasks:
+  default:
+    desc: "显示可用任务列表"
+    cmds:
+      - task --list
+    silent: true
+
+  run:
+    desc: "运行图像重命名工具 - 批量重命名图像文件"
+    cmds:
+      - "{{.PYTHON_CMD}}"
+
+  clipboard:
+    desc: "从剪贴板读取路径"
+    cmds:
+      - "{{.PYTHON_CMD}} --clipboard"
+
+  custom:
+    desc: "自定义配置 - 手动指定参数"
+    cmds:
+      - "{{.PYTHON_CMD}} {{.CLI_ARGS}}"

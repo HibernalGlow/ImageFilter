@@ -1,0 +1,63 @@
+# https://taskfile.dev
+
+version: '3'
+
+vars:
+  PYTHON_CMD: batchfilter
+
+tasks:
+  default:
+    desc: "显示可用任务列表"
+    cmds:
+      - task --list
+    silent: true
+
+  remove-small:
+    desc: "去小图 - 仅去除小尺寸图片"
+    cmds:
+      - "{{.PYTHON_CMD}} --enable-small-filter --clipboard --min-size 630"
+
+  remove-duplicate:
+    desc: "去重复 - 仅去除重复图片"
+    cmds:
+      - "{{.PYTHON_CMD}} --enable-duplicate-filter --clipboard --ref-hamming-threshold 6 --duplicate-filter-mode quality"
+
+  lpips-duplicate:
+    desc: "LPIPS去重 - 使用LPIPS感知相似度去除重复图片（禁用TUI）"
+    cmds:
+      - "{{.PYTHON_CMD}} --enable-duplicate-filter --clipboard --notui --duplicate-filter-mode lpips --lpips-threshold 0.02"
+
+  remove-watermark:
+    desc: "去水印图 - 去除带水印的图片"
+    cmds:
+      - "{{.PYTHON_CMD}} --enable-duplicate-filter --clipboard --ref-hamming-threshold 12 --duplicate-filter-mode watermark"
+
+  remove-grayscale:
+    desc: "去黑白 - 仅去除黑白/白图"
+    cmds:
+      - "{{.PYTHON_CMD}} --enable-grayscale-filter --clipboard"
+
+  hash-compare:
+    desc: "哈希比对 - 使用哈希文件比对去重"
+    cmds:
+      - "{{.PYTHON_CMD}} --enable-duplicate-filter --clipboard --duplicate-filter-mode hash --ref-hamming-threshold 12"
+
+  merge:
+    desc: "合并 - 合并多个压缩包并处理"
+    cmds:
+      - "{{.PYTHON_CMD}} --merge-archives --enable-duplicate-filter --clipboard --duplicate-filter-mode quality --ref-hamming-threshold 4"
+
+  full-filter:
+    desc: "完整过滤 - 去重+去小图+去黑白+去文本"
+    cmds:
+      - "{{.PYTHON_CMD}} --merge-archives --enable-small-filter --enable-duplicate-filter --enable-grayscale-filter --clipboard --min-size 630 --ref-hamming-threshold 12 --duplicate-filter-mode quality"
+
+  lpips-full:
+    desc: "LPIPS完整过滤 - 使用LPIPS的完整过滤（禁用TUI）"
+    cmds:
+      - "{{.PYTHON_CMD}} --merge-archives --enable-small-filter --enable-duplicate-filter --enable-grayscale-filter --clipboard --notui --min-size 630 --duplicate-filter-mode lpips --lpips-threshold 0.02"
+
+  custom:
+    desc: "自定义配置 - 手动指定参数"
+    cmds:
+      - "{{.PYTHON_CMD}} {{.CLI_ARGS}}"

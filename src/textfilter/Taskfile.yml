@@ -1,0 +1,28 @@
+# https://taskfile.dev
+
+version: '3'
+
+vars:
+  PYTHON_CMD: textfilter
+
+tasks:
+  default:
+    desc: "显示可用任务列表"
+    cmds:
+      - task --list
+    silent: true
+
+  run:
+    desc: "运行文本过滤器 - 处理文本文件"
+    cmds:
+      - "{{.PYTHON_CMD}}"
+
+  clipboard:
+    desc: "从剪贴板读取路径"
+    cmds:
+      - "{{.PYTHON_CMD}} --clipboard"
+
+  custom:
+    desc: "自定义配置 - 手动指定参数"
+    cmds:
+      - "{{.PYTHON_CMD}} {{.CLI_ARGS}}"

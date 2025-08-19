@@ -1,0 +1,43 @@
+# https://taskfile.dev
+
+version: '3'
+
+vars:
+  PYTHON_CMD: rawfilter
+
+tasks:
+  default:
+    desc: "显示可用任务列表"
+    cmds:
+      - task --list
+    silent: true
+
+  name-only:
+    desc: "name-only模式 - 从剪贴板读取路径，执行标准处理"
+    cmds:
+      - "{{.PYTHON_CMD}} --clipboard --name-only-mode"
+
+  basic:
+    desc: "基本模式 - 从剪贴板读取路径，执行标准处理"
+    cmds:
+      - "{{.PYTHON_CMD}} --clipboard"
+
+  shortcuts:
+    desc: "快捷方式模式 - 创建快捷方式而不是移动文件"
+    cmds:
+      - "{{.PYTHON_CMD}} --clipboard --create-shortcuts"
+
+  multi-main:
+    desc: "多文件保留模式 - 为每个multi组创建主文件副本"
+    cmds:
+      - "{{.PYTHON_CMD}} --clipboard --enable-multi-main"
+
+  full:
+    desc: "完整模式 - 启用所有高级功能"
+    cmds:
+      - "{{.PYTHON_CMD}} --clipboard --create-shortcuts --enable-multi-main --sample-count 5"
+
+  cli:
+    desc: "命令行模式 - 手动指定参数"
+    cmds:
+      - "{{.PYTHON_CMD}} {{.CLI_ARGS}}"

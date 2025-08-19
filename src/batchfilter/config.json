@@ -1,0 +1,110 @@
+{
+    "default_settings": {
+        "min_size": 630,
+        "hamming_distance": 12,
+        "lpips_threshold": 0.02
+    },
+    "archive_settings": {
+        "blacklist_keywords": ["merged_", "temp_", "backup_", ".new", ".trash"]
+    },
+    "textual_layout": {
+        "cur_stats": {
+            "ratio": 1,
+            "title": "📊 总体进度",
+            "style": "lightyellow"
+        },
+        "cur_progress": {
+            "ratio": 1,
+            "title": "🔄 当前进度",
+            "style": "lightcyan"
+        },
+        "file_ops": {
+            "ratio": 2,
+            "title": "📂 文件操作",
+            "style": "lightpink"
+        },
+        "hash_calc": {
+            "ratio": 2,
+            "title": "🔢 哈希计算",
+            "style": "lightblue"
+        },
+        "update_log": {
+            "ratio": 1,
+            "title": "🔧 系统消息",
+            "style": "lightwhite"
+        }
+    },
+    "preset_configs": {
+        "去小图": {
+            "description": "仅去除小尺寸图片",
+            "checkbox_options": ["enable_small_filter", "clipboard"],
+            "input_values": {
+                "min_size": "630"
+            }
+        },
+        "去重复": {
+            "description": "仅去除重复图片",
+            "checkbox_options": ["enable_duplicate_filter", "clipboard"],
+            "input_values": {
+                "ref_hamming_threshold": "6",
+                "duplicate_filter_mode": "quality"
+            }
+        },
+        "LPIPS去重": {
+            "description": "使用LPIPS感知相似度去除重复图片（禁用TUI）",
+            "checkbox_options": ["enable_duplicate_filter", "clipboard", "notui"],
+            "input_values": {
+                "duplicate_filter_mode": "lpips",
+                "lpips_threshold": "0.02"
+            }
+        },
+        "去水印图": {
+            "description": "去除带水印的图片",
+            "checkbox_options": ["enable_duplicate_filter", "clipboard"],
+            "input_values": {
+                "ref_hamming_threshold": "12",
+                "duplicate_filter_mode": "watermark"
+            }
+        },
+        "去黑白": {
+            "description": "仅去除黑白/白图",
+            "checkbox_options": ["enable_grayscale_filter", "clipboard"],
+            "input_values": {}
+        },
+        "哈希比对": {
+            "description": "使用哈希文件比对去重",
+            "checkbox_options": ["enable_duplicate_filter", "clipboard"],
+            "input_values": {
+                "duplicate_filter_mode": "hash",
+                "hash_file": "",
+                "ref_hamming_threshold": "12"
+            }
+        },
+        "合并": {
+            "description": "合并多个压缩包并处理",
+            "checkbox_options": ["merge_archives", "enable_duplicate_filter", "clipboard"],
+            "input_values": {
+                "duplicate_filter_mode": "quality",
+                "ref_hamming_threshold": "4"
+            }
+        },
+        "完整过滤": {
+            "description": "完整过滤(去重+去小图+去黑白+去文本)",
+            "checkbox_options": ["merge_archives", "enable_small_filter", "enable_duplicate_filter", "enable_grayscale_filter", "clipboard"],
+            "input_values": {
+                "min_size": "630",
+                "ref_hamming_threshold": "12",
+                "duplicate_filter_mode": "quality"
+            }
+        },
+        "LPIPS完整过滤": {
+            "description": "使用LPIPS的完整过滤(去重+去小图+去黑白)（禁用TUI）",
+            "checkbox_options": ["merge_archives", "enable_small_filter", "enable_duplicate_filter", "enable_grayscale_filter", "clipboard", "notui"],
+            "input_values": {
+                "min_size": "630",
+                "duplicate_filter_mode": "lpips",
+                "lpips_threshold": "0.02"
+            }
+        }
+    }
+} 

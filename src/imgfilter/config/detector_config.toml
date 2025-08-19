@@ -1,0 +1,21 @@
+"""
+imgfilter 检测器配置模板
+此文件用于配置imgfilter使用哪种检测器实现
+"""
+
+[detectors]
+# 可用值: "default", "deepghs"
+# 灰度图检测器配置
+grayscale = "deepghs"
+
+# 文本检测器配置
+text = "default"       
+
+# 重复图片检测器配置
+duplicate = "default"  
+
+# 小图检测器配置
+small = "default"      
+
+# 水印检测器配置
+watermark = "default"  

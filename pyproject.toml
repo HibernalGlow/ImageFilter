@@ -1,0 +1,113 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "imagefilter"
+version = "2.0.1"
+description = "检测压缩文件完整性的工具，将损坏文件重命名为.tdel"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [
+    {name = "作者名称", email = "your.email@example.com"},
+]
+keywords = ["zip", "archive", "integrity", "check"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Utilities",
+    "Topic :: System :: Archiving",
+]
+dependencies = [
+    "loguru>=0.6.0",
+    "pyperclip>=1.8.2",
+    "loguru>=0.7.0",
+    "send2trash",
+    "numpy",
+    "requests",
+    "tqdm",
+    "pillow>=10.0.0",
+    "pyvips>=2.2.1",
+    "textual>=0.40.0",
+    "pathlib>=1.0.1",
+    "typing-extensions>=4.7.0",
+    "pillow-avif-plugin>=1.4.6",
+    "pillow-jxl-plugin>=1.3.2",
+    "TextualLog @ git+https://github.com/HibernalGlow/TextualLog.git",
+    "PresetUI @ git+https://github.com/HibernalGlow/PresetUI.git",
+    "imagehash",
+    "regex", 
+    "orjson>=3.10.18",
+    "pywin32>=310",
+    "opencc-python-reimplemented",
+    "typer>=0.15.4",
+    "rich>=13.0.0",
+    "opencv-python",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "mypy>=1.0.0",
+    "ruff>=0.0.260",
+]
+full = [
+    "dghs-imgutils",
+    "onnxruntime-gpu",
+]
+gpu = [
+    "dghs-imgutils",
+    "onnxruntime-gpu",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/HibernalGlow/Imagefilter"
+"Bug Tracker" = "https://github.com/HibernalGlow/Imagefilter/issues"
+"Documentation" = "https://github.com/HibernalGlow/Imagefilter#readme"
+
+[project.scripts]
+imgfilter = "imgfilter.__main__:main"
+batchfilter = "batchfilter.__main__:main"
+hashu = "hashu.__main__:main"
+artfilter = "artfilter.__main__:main"
+rawfilter = "rawfilter.__main__:main"
+recruitfilter = "recruitfilter.__main__:main"
+textfilter = "textfilter.__main__:main"
+widthfilter = "widthfilter.__main__:main"
+renamei = "renamei.__main__:main"
+bakf = "bakf.__main__:main"
+hashpre = "hashu.prepare.__main__:main"
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.isort]
+profile = "black"
+line_length = 100
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+select = ["E", "F", "I", "W"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+

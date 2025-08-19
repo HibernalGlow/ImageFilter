@@ -1,0 +1,28 @@
+# https://taskfile.dev
+
+version: '3'
+
+vars:
+  PYTHON_CMD: artfilter
+
+tasks:
+  default:
+    desc: "显示可用任务列表"
+    cmds:
+      - task --list
+    silent: true
+
+  run:
+    desc: "运行艺术过滤器 - 过滤特定类型的艺术作品"
+    cmds:
+      - "{{.PYTHON_CMD}}"
+
+  clipboard:
+    desc: "从剪贴板读取路径"
+    cmds:
+      - "{{.PYTHON_CMD}} --clipboard"
+
+  custom:
+    desc: "自定义配置 - 手动指定参数"
+    cmds:
+      - "{{.PYTHON_CMD}} {{.CLI_ARGS}}"

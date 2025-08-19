@@ -1,0 +1,33 @@
+# https://taskfile.dev
+
+version: '3'
+
+vars:
+  PYTHON_CMD: hashu
+
+tasks:
+  default:
+    desc: "显示可用任务列表"
+    cmds:
+      - task --list
+    silent: true
+
+  run:
+    desc: "运行哈希工具 - 计算和比较文件哈希值"
+    cmds:
+      - "{{.PYTHON_CMD}}"
+
+  prepare:
+    desc: "哈希预处理 - 预处理哈希计算"
+    cmds:
+      - "hashpre"
+
+  clipboard:
+    desc: "从剪贴板读取路径"
+    cmds:
+      - "{{.PYTHON_CMD}} --clipboard"
+
+  custom:
+    desc: "自定义配置 - 手动指定参数"
+    cmds:
+      - "{{.PYTHON_CMD}} {{.CLI_ARGS}}"
