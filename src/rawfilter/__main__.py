@@ -133,103 +133,6 @@ TEXTUAL_LAYOUT = {
     }
 }
 
-class ReportGenerator:
-    """生成处理报告的类"""
-    def __init__(self):
-        self.report_sections = []
-        self.stats = {
-            'total_files': 0,
-            'total_groups': 0,
-            'moved_to_trash': 0,
-            'moved_to_multi': 0,
-            'skipped_files': 0,
-            'created_shortcuts': 0
-        }
-        self.group_details = []
-        
-    def add_group_detail(self, group_name: str, details: Dict):
-        """添加组处理详情"""
-        self.group_details.append({
-            'name': group_name,
-            'details': details
-        })
-        
-    def update_stats(self, key: str, value: int = 1):
-        """更新统计信息"""
-        self.stats[key] = self.stats.get(key, 0) + value
-        
-    def add_section(self, title: str, content: str):
-        """添加报告章节"""
-        self.report_sections.append({
-            'title': title,
-            'content': content
-        })
-        
-    def generate_report(self, base_dir: str) -> str:
-        """生成最终的MD报告"""
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        report = [
-            f"# 文件处理报告",
-            f"生成时间: {timestamp}",
-            f"处理目录: {base_dir}",
-            "",
-            "## 处理统计",
-            f"- 总文件数: {shorten_number_cn(self.stats['total_files'])}",
-            f"- 总分组数: {shorten_number_cn(self.stats['total_groups'])}",
-            f"- 移动到trash目录: {shorten_number_cn(self.stats['moved_to_trash'])}",
-            f"- 移动到multi目录: {shorten_number_cn(self.stats['moved_to_multi'])}",
-            f"- 跳过的文件: {shorten_number_cn(self.stats['skipped_files'])}",
-            f"- 创建的快捷方式: {shorten_number_cn(self.stats['created_shortcuts'])}",
-            ""
-        ]
-        
-        # 添加组详情（改为列表形式）
-        if self.group_details:
-            report.append("## 处理详情列表")
-            for group in self.group_details:
-                report.append(f"- **{group['name']}**")
-                details = group['details']
-                if 'chinese_versions' in details:
-                    report.append("  - 汉化版本:")
-                    for file in details['chinese_versions']:
-                        report.append(f"    - {file}")
-                if 'other_versions' in details:
-                    report.append("  - 其他版本:")
-                    for file in details['other_versions']:
-                        report.append(f"    - {file}")
-                if 'actions' in details:
-                    report.append("  - 执行操作:")
-                    for action in details['actions']:
-                        report.append(f"    - {action}")
-                report.append("")  # 组间空行
-        
-        # 其他章节保持标题形式
-        for section in self.report_sections:
-            report.append(f"## {section['title']}")
-            report.append(section['content'])
-            report.append("")
-            
-        return "\n".join(report)
-        
-    def save_report(self, base_dir: str, filename: Optional[str] = None):
-        """保存报告到文件"""
-        if filename is None:
-            filename = f"处理报告_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
-        
-        report_path = os.path.join(base_dir, filename)
-        report_content = self.generate_report(base_dir)
-        
-        try:
-            with open(report_path, 'w', encoding='utf-8') as f:
-                f.write(report_content)
-            return report_path
-        except Exception as e:
-            logger.error("[#error_log] ❌ 保存报告失败: {}", str(e))
-            logger.exception("[#error_log] 异常堆栈:")  # 自动记录堆栈信息
-            # 在界面显示错误详情
-            logger.info("[#process] 💥 遇到严重错误，请检查error_log面板")
-            return None
-
 # 初始化colorama
 init()
 
@@ -983,7 +886,7 @@ def process_file_group(group_files: List[str], base_dir: str, trash_dir: str, cr
     
     return result_stats
 
-def process_directory(directory: str, report_generator: ReportGenerator, dry_run: bool = False, create_shortcuts: bool = False, enable_multi_main: bool = False, name_only_mode: bool = False, trash_only: bool = False) -> None:
+def process_directory(directory: str, dry_run: bool = False, create_shortcuts: bool = False, enable_multi_main: bool = False, name_only_mode: bool = False, trash_only: bool = False) -> None:
     """处理单个目录"""
     # 创建trash目录
     trash_dir = os.path.join(directory, 'trash')
@@ -1016,7 +919,7 @@ def process_directory(directory: str, report_generator: ReportGenerator, dry_run
     logger.info("[#process] ✅ 扫描完成，共找到 {} 个压缩文件", len(all_files))
 
     # 更新报告统计
-    report_generator.update_stats('total_files', len(all_files))
+    # report_generator.update_stats('total_files', len(all_files))
 
     # 对文件进行分组
     logger.info("[#process] 🔄 开始文件分组...")
@@ -1024,7 +927,7 @@ def process_directory(directory: str, report_generator: ReportGenerator, dry_run
     logger.info("[#stats] 📊 分组完成 - 总文件: {} 个，分组: {} 个", len(all_files), len(groups))
 
     # 更新报告统计
-    report_generator.update_stats('total_groups', len(groups))
+    # report_generator.update_stats('total_groups', len(groups))
     
     # 创建进程池进行并行处理
     logger.info("[#process] 🔄 开始处理文件组...")
@@ -1052,14 +955,14 @@ def process_directory(directory: str, report_generator: ReportGenerator, dry_run
             scan_percent = completed / future_count * 100
             
             # 获取处理结果并更新报告
-            try:
-                result_stats = future.result()
-                # 更新统计信息
-                for key, value in result_stats.items():
-                    if value > 0:
-                        report_generator.update_stats(key, value)
-            except Exception as e:
-                logger.error("[#error_log] ❌ 处理组时出错: {}, 错误: {}", futures[future], str(e))
+            # try:
+            #     result_stats = future.result()
+            #     # 更新统计信息
+            #     for key, value in result_stats.items():
+            #         if value > 0:
+            # #             report_generator.update_stats(key, value)
+            # except Exception as e:
+            #     logger.error("[#error_log] ❌ 处理组时出错: {}, 错误: {}", futures[future], str(e))
 
             logger.info("[@stats] 组进度: ({}/{}) {:.2f}%", completed, future_count, scan_percent)
 

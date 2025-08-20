@@ -3,7 +3,12 @@
     "rules": [
       { "type": "version" },
       { "type": "keyword", "keywords": ["无修", "無修", "uncensor", "无码", "無碼", "去码"], "scope": "chinese", "keep_matching": true },
-      { "type": "keyword", "keywords": ["dl","dlsite", "dl版", "DL", "DL版"], "scope": "chinese", "keep_matching": true }
+      { "type": "keyword", "keywords": ["dl", "dlsite", "dl版", "DL", "DL版"], "scope": "chinese", "keep_matching": true },
+      { "type": "keyword", "keywords": ["官方", "简体中文", "简中", "简体", "数位", "數位"], "scope": "chinese", "keep_matching": true },
+      { "type": "keyword", "keywords": ["重嵌", "修图"], "scope": "chinese", "keep_matching": true },
+      { "type": "keyword", "keywords": ["第二版"], "scope": "chinese", "keep_matching": true },
+      { "type": "keyword", "keywords": ["广告", "镜面光折射", "禁漫"], "scope": "chinese", "keep_matching": false },
+      { "type": "keyword", "keywords": ["中国翻訳","中国翻译", "中国翻譯", "机翻"], "scope": "chinese", "keep_matching": false }
     ]
   }
 }

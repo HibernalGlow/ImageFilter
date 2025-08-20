@@ -67,8 +67,8 @@ def main(
                 raise typer.Exit(code=0)
         except FileNotFoundError:
             typer.echo("未找到 'lata'，回退到命令行模式。", err=True)
-        except Exception as e:
-            typer.echo(f"启动 lata 失败: {e}，回退到命令行模式。", err=True)
+        # except Exception as e:
+        #     typer.echo(f"启动 lata 失败: {e}，回退到命令行模式。", err=True)
 
     all_paths = _resolve_paths(paths, clipboard)
     if not all_paths:
@@ -103,8 +103,8 @@ def tui() -> None:
         subprocess.run("lata", cwd=script_dir)
     except FileNotFoundError:
         typer.echo("未找到 'lata' 可执行文件，请确认已安装。", err=True)
-    except Exception as e:
-        typer.echo(f"启动 lata 失败: {e}", err=True)
+    # except Exception as e:
+    #     typer.echo(f"启动 lata 失败: {e}", err=True)
 
 def run():  # 供外部调用
     app()
