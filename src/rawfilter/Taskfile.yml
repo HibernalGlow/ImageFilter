@@ -17,6 +17,10 @@ tasks:
     cmds:
       - "{{.PYTHON_CMD}} --clipboard --name-only-mode"
 
+  trash-only:
+    desc: "trash-only模式 - 从剪贴板读取路径，执行标准处理"
+    cmds:
+      - "{{.PYTHON_CMD}} --clipboard --name-only-mode --trash-only"
   basic:
     desc: "基本模式 - 从剪贴板读取路径，执行标准处理"
     cmds:

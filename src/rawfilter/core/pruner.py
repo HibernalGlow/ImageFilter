@@ -1,5 +1,7 @@
 import os
 import re
+import json
+from functools import lru_cache
 from typing import List, Dict, Tuple, Callable, Any
 
 # 默认无修正关键字，可扩展
@@ -7,7 +9,7 @@ DEFAULT_UNCENSORED_KEYWORDS = [
     "无修正", "無修正", "無修", "uncensored", "無碼", "无码", "無穢", "無修正版"
 ]
 
-# 默认DL关键字
+# 默认DL关键字 (需要优先保留而不是丢弃)
 DEFAULT_DL_KEYWORDS = ["dl", "dl版", "DL", "DL版"]
 
 _version_pattern = re.compile(r'(?:[\s_\-\(\[])?v(\d+)(?=[)\]]?$|$)', re.IGNORECASE)
@@ -61,12 +63,16 @@ def apply_prune_rules(
 
     返回更新后的 (chinese_versions, other_versions)
     """
-    # 默认规则顺序：版本号 -> 无修正(优先保留匹配) -> DL(丢弃DL)
+    # 允许从外部配置覆盖；若调用方传入 rules 则优先；否则读取配置；再退回默认
     if rules is None:
+        cfg = get_pruner_config(logger) or {}
+        rules = (cfg.get('rules') if isinstance(cfg.get('rules'), list) else None)
+    if rules is None:
+        # 默认规则顺序：版本号 -> 无修正(优先保留匹配) -> DL(优先保留匹配)
         rules = [
             {"type": "version"},
             {"type": "keyword", "keywords": DEFAULT_UNCENSORED_KEYWORDS, "scope": "chinese", "keep_matching": True},
-            {"type": "keyword", "keywords": DEFAULT_DL_KEYWORDS, "scope": "chinese", "keep_matching": False},
+            {"type": "keyword", "keywords": DEFAULT_DL_KEYWORDS, "scope": "chinese", "keep_matching": True},
         ]
 
     # 合并两类用于某些规则的处理
@@ -135,14 +141,10 @@ def apply_prune_rules(
 
                 # 根据 keep_matching 决定保留或丢弃匹配项
                 if keep_matching:
-                    # 保留匹配项；若匹配项数量为1，则丢弃目标集合中的其余项；若>1，则丢弃目标集合中不匹配的项，保留所有匹配项
-                    if len(matched) == 1:
-                        # 丢弃目标集合中非匹配的所有
-                        to_trash = [p for p, _ in targets if p not in matched]
-                    else:
-                        to_trash = [p for p, _ in targets if p not in matched]
+                    # 语义：只保留匹配项（无论匹配数1还是>1）
+                    to_trash = [p for p, _ in targets if p not in matched]
                 else:
-                    # 丢弃匹配项
+                    # 语义：丢弃匹配项
                     to_trash = matched
 
                 # 执行移动并从列表中移除
@@ -174,3 +176,30 @@ def apply_prune_rules(
             logger.error(f"[#error_log] 裁剪规则执行异常 {rule}: {e}")
 
     return chinese_versions, other_versions
+
+
+@lru_cache(maxsize=1)
+def get_pruner_config(logger=None) -> Dict[str, Any] | None:
+    """加载 rawfilter/config.json 中的 pruner 配置；采用 LRU 缓存避免重复 IO。
+
+    结构示例:
+    {
+      "pruner": {
+         "rules": [...],
+         "trash_only": false
+      }
+    }
+    若不存在文件或键，则返回 {}。
+    """
+    try:
+        base_dir = os.path.dirname(os.path.dirname(__file__))  # rawfilter/core -> rawfilter
+        cfg_path = os.path.join(base_dir, 'config.json')
+        if not os.path.isfile(cfg_path):
+            return {}
+        with open(cfg_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        return data.get('pruner', {}) or {}
+    except Exception as e:
+        if logger:
+            logger.error(f"[#error_log] 读取 pruner 配置失败: {e}")
+        return {}

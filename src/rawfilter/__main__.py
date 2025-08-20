@@ -743,7 +743,7 @@ def process_file_with_count(file_path: str, name_only_mode: bool = False) -> Tup
 
     return file_path, new_path, metrics
 
-def process_file_group(group_files: List[str], base_dir: str, trash_dir: str, create_shortcuts: bool = False, enable_multi_main: bool = False, name_only_mode: bool = False) -> Dict:
+def process_file_group(group_files: List[str], base_dir: str, trash_dir: str, create_shortcuts: bool = False, enable_multi_main: bool = False, name_only_mode: bool = False, trash_only: bool = False) -> Dict:
     """处理一组相似文件，返回处理结果统计"""
     # 处理结果统计
     result_stats = {
@@ -886,30 +886,41 @@ def process_file_group(group_files: List[str], base_dir: str, trash_dir: str, cr
     except Exception as e:
         logger.error("[#error_log] 裁剪规则引擎异常: {}", e)
     
-    # 处理文件移动逻辑
+    # 读取 pruner 配置以获取 trash_only 开关
+    try:
+        from .core.pruner import get_pruner_config
+        pruner_cfg = get_pruner_config(logger)
+        trash_only = bool(pruner_cfg.get('trash_only'))
+    except Exception:
+        trash_only = False
+
+    # 处理文件移动逻辑 (支持 trash_only: 只执行丢垃圾，不创建 multi / 不移动到 multi)
     if chinese_versions:
         # 有汉化版本的情况
         if len(chinese_versions) > 1:
-            # 多个汉化版本，移动到multi
-            multi_dir = os.path.join(base_dir, 'multi')
-            os.makedirs(multi_dir, exist_ok=True)
-            
-            # 如果启用了multi-main功能，找到最大的文件作为主文件
-            if enable_multi_main:
-                main_file = max(chinese_versions, key=lambda x: os.path.getsize(os.path.join(base_dir, x)))
-                if handle_multi_main_file(main_file, base_dir):
-                    logger.info("[#file_ops] ✅ 已处理multi-main文件: {}", main_file)
-            
-            # 移动所有文件到multi目录
-            for file in chinese_versions:
-                src_path = os.path.join(base_dir, file)
-                rel_path = os.path.relpath(src_path, base_dir)
-                dst_path = os.path.join(multi_dir, rel_path)
-                if safe_move_file(src_path, dst_path):
-                    logger.info("[#file_ops] ✅ 已移动到multi: {}", file)
-                    result_stats['moved_to_multi'] += 1
-            
-            # 移动其他非原版到trash
+            if not trash_only:
+                # 多个汉化版本，移动到multi
+                multi_dir = os.path.join(base_dir, 'multi')
+                os.makedirs(multi_dir, exist_ok=True)
+
+                # 如果启用了multi-main功能，找到最大的文件作为主文件
+                if enable_multi_main:
+                    main_file = max(chinese_versions, key=lambda x: os.path.getsize(os.path.join(base_dir, x)))
+                    if handle_multi_main_file(main_file, base_dir):
+                        logger.info("[#file_ops] ✅ 已处理multi-main文件: {}", main_file)
+
+                # 移动所有文件到multi目录
+                for file in chinese_versions:
+                    src_path = os.path.join(base_dir, file)
+                    rel_path = os.path.relpath(src_path, base_dir)
+                    dst_path = os.path.join(multi_dir, rel_path)
+                    if safe_move_file(src_path, dst_path):
+                        logger.info("[#file_ops] ✅ 已移动到multi: {}", file)
+                        result_stats['moved_to_multi'] += 1
+            else:
+                logger.info("[#pruner] 🛑 trash_only 模式：跳过 multi 移动 (汉化多版本共 {} 个)", len(chinese_versions))
+
+            # 无论是否 trash_only 都要将其他 non-chinese 版本丢进 trash
             for other_file in other_versions:
                 src_path = os.path.join(base_dir, other_file)
                 rel_path = os.path.relpath(src_path, base_dir)
@@ -943,33 +954,36 @@ def process_file_group(group_files: List[str], base_dir: str, trash_dir: str, cr
     else:
         # 没有汉化版本的情况
         if len(other_versions) > 1:
-            # 多个原版，移动到multi
-            multi_dir = os.path.join(base_dir, 'multi')
-            os.makedirs(multi_dir, exist_ok=True)
-            
-            # 如果启用了multi-main功能，找到最大的文件作为主文件
-            if enable_multi_main:
-                main_file = max(other_versions, key=lambda x: os.path.getsize(os.path.join(base_dir, x)))
-                # 创建主文件的副本
-                if handle_multi_main_file(main_file, base_dir):
-                    logger.info("[#file_ops] ✅ 已处理multi-main文件: {}", main_file)
-            
-            # 移动所有文件到multi目录
-            for file in other_versions:
-                src_path = os.path.join(base_dir, file)
-                rel_path = os.path.relpath(src_path, base_dir)
-                dst_path = os.path.join(multi_dir, rel_path)
-                if safe_move_file(src_path, dst_path):
-                    logger.info("[#file_ops] ✅ 已移动到multi: {}", file)
-                    result_stats['moved_to_multi'] += 1
-            logger.info("[#group_info] 🔍 组[{}]处理: 未发现汉化版本，发现{}个原版，已移动到multi", group_base_name, len(other_versions))
+            if not trash_only:
+                # 多个原版，移动到multi
+                multi_dir = os.path.join(base_dir, 'multi')
+                os.makedirs(multi_dir, exist_ok=True)
+
+                # 如果启用了multi-main功能，找到最大的文件作为主文件
+                if enable_multi_main:
+                    main_file = max(other_versions, key=lambda x: os.path.getsize(os.path.join(base_dir, x)))
+                    # 创建主文件的副本
+                    if handle_multi_main_file(main_file, base_dir):
+                        logger.info("[#file_ops] ✅ 已处理multi-main文件: {}", main_file)
+
+                # 移动所有文件到multi目录
+                for file in other_versions:
+                    src_path = os.path.join(base_dir, file)
+                    rel_path = os.path.relpath(src_path, base_dir)
+                    dst_path = os.path.join(multi_dir, rel_path)
+                    if safe_move_file(src_path, dst_path):
+                        logger.info("[#file_ops] ✅ 已移动到multi: {}", file)
+                        result_stats['moved_to_multi'] += 1
+                logger.info("[#group_info] 🔍 组[{}]处理: 未发现汉化版本，发现{}个原版，已移动到multi", group_base_name, len(other_versions))
+            else:
+                logger.info("[#pruner] 🛑 trash_only 模式：跳过 multi 移动 (原版多版本共 {} 个)", len(other_versions))
         else:
             # 单个原版，保持原位置
             logger.info("[#group_info] 🔍 组[{}]处理: 未发现汉化版本，仅有1个原版，保持原位置", group_base_name)
     
     return result_stats
 
-def process_directory(directory: str, report_generator: ReportGenerator, dry_run: bool = False, create_shortcuts: bool = False, enable_multi_main: bool = False, name_only_mode: bool = False) -> None:
+def process_directory(directory: str, report_generator: ReportGenerator, dry_run: bool = False, create_shortcuts: bool = False, enable_multi_main: bool = False, name_only_mode: bool = False, trash_only: bool = False) -> None:
     """处理单个目录"""
     # 创建trash目录
     trash_dir = os.path.join(directory, 'trash')
@@ -1026,7 +1040,8 @@ def process_directory(directory: str, report_generator: ReportGenerator, dry_run
                     trash_dir,
                     create_shortcuts,
                     enable_multi_main,
-                    name_only_mode
+                    name_only_mode,
+                    trash_only,
                 )
                 futures[future] = group_base_name
         
@@ -1174,121 +1189,9 @@ def handle_multi_main_file(file_path: str, base_dir: str) -> Optional[str]:
         logger.error("[#error_log] ❌ 创建multi-main副本失败 {}: {}", file_path, str(e))
         return None
 
-def setup_cli_parser():
-    """设置命令行参数解析器"""
-    parser = argparse.ArgumentParser(description='处理重复压缩包文件')
-    group = parser.add_mutually_exclusive_group()
-    group.add_argument('-c', '--clipboard', action='store_true', help='从剪贴板读取路径')
-    group.add_argument('-p', '--paths', nargs='+', help='要处理的目录路径')
-    parser.add_argument('-s', '--sample-count', type=int, default=3, help='每个压缩包抽取的图片样本数量（默认3）')
-    parser.add_argument('--create-shortcuts', action='store_true', help='创建快捷方式而不是移动文件')
-    parser.add_argument('--enable-multi-main', action='store_true', help='为每个multi组创建主文件副本')
-    parser.add_argument('--name-only-mode', action='store_true', help='仅名称模式：仅通过文件名判断，不检查内部文件数量和清晰度，不添加{}标记')
-    parser.add_argument('--report', type=str, help='指定报告文件名（默认为"处理报告_时间戳.md"）')
-    return parser
-
-def run_application(args):
-    """运行应用程序的主函数"""
-    # 获取要处理的路径
-    paths = []
-    
-    # 从剪贴板读取
-    if hasattr(args, 'clipboard') and args.clipboard:
-        paths.extend(get_paths_from_clipboard())
-    # 从命令行参数读取
-    elif hasattr(args, 'paths') and args.paths:
-        if isinstance(args.paths, str):
-            # 如果是TUI模式传入的字符串，按逗号分割
-            paths.extend([p.strip() for p in args.paths.split(',') if p.strip()])
-        else:
-            # 命令行模式传入的列表
-            paths.extend(args.paths)
-    # 默认从终端输入
-    else:
-        print("请输入要处理的路径（每行一个，输入空行结束）：")
-        while True:
-            try:
-                line = input().strip()
-                if not line:  # 空行结束输入
-                    break
-                paths.append(line)
-            except EOFError:
-                break
-            except KeyboardInterrupt:
-                print("用户取消输入")
-        
-    if not paths:
-        logger.info("[#error_log] ❌ 未提供任何路径")
-        return False
-        
-    # 处理和验证所有路径
-    valid_paths = process_paths(paths)
-    
-    if not valid_paths:
-        logger.info("[#error_log] ❌ 没有有效的路径可处理")
-        return False
-    
-    # 创建报告生成器
-    report_generator = ReportGenerator()
-    
-    # 处理每个路径
-    for path in valid_paths:
-        logger.info("[#process] 🚀 开始处理目录: {}", path)
-        process_directory(
-            path,
-            report_generator,
-            create_shortcuts=args.create_shortcuts if hasattr(args, 'create_shortcuts') else False,
-            enable_multi_main=args.enable_multi_main if hasattr(args, 'enable_multi_main') else False,
-            name_only_mode=args.name_only_mode if hasattr(args, 'name_only_mode') else False
-        )
-        logger.info("[#process] ✨ 目录处理完成: {}", path)
-        
-        # 生成并保存报告
-        if hasattr(args, 'report') and args.report:
-            report_path = report_generator.save_report(path, args.report)
-        else:
-            report_path = report_generator.save_report(path)
-            
-        if report_path:
-            logger.info("[#process] 📝 报告已保存到: {}", report_path)
-        else:
-            logger.info("[#error_log] ❌ 保存报告失败")
-    
-    return True
-
-def main():
-    """主函数"""
-    parser = setup_cli_parser()
-    
-    # 创建预设配置
-    # 检查是否有命令行参数
-    has_args = len(sys.argv) > 1
-    
-    if has_args:
-        # 直接通过命令行参数运行
-        args = parser.parse_args(sys.argv[1:])
-        run_application(args)
-    else:
-        # 使用 lata cli 启动 taskfile 界面
-        try:
-            import subprocess
-            from pathlib import Path
-
-            # 获取当前包目录（rawfilter 目录）
-            script_dir = Path(__file__).parent
-
-            # 启动 lata cli
-            result = subprocess.run(
-                "lata",
-                cwd=script_dir
-            )
-
-            return result.returncode
-
-        except Exception as e:
-            print(f"启动 lata cli 失败: {e}")
-            print("请通过命令行参数运行。")
-            return 1
+def main():  # 统一入口，委托 Typer 应用
+    from .cli import app as _app
+    _app()
 
 if __name__ == "__main__":
 

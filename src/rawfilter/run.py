@@ -34,7 +34,7 @@ def get_image_count(archive_path: str) -> int:
         except zipfile.BadZipFile:
             return 0
     except Exception as e:
-        logger.error("[#error_log] ❌ 统计图片数量失败 %s: %s", archive_path, str(e))
+        logger.error("[#error_log] ❌ 统计图片数量失败 {}: {}", archive_path, e)
         return 0
 
 def calculate_representative_width(archive_path: str, sample_count: int = 3) -> int:
@@ -49,7 +49,7 @@ def calculate_representative_width(archive_path: str, sample_count: int = 3) -> 
                     if os.path.splitext(info.filename.lower())[1] in IMAGE_EXTENSIONS:
                         image_files.append((info.filename, info.file_size))
         except zipfile.BadZipFile:
-            logger.info("[#error_log] ⚠️ 无效的ZIP文件: %s", archive_path)
+            logger.info("[#error_log] ⚠️ 无效的ZIP文件: {}", archive_path)
             return 0
         if not image_files:
             return 0
@@ -74,16 +74,16 @@ def calculate_representative_width(archive_path: str, sample_count: int = 3) -> 
                             with Image.open(io.BytesIO(img_data)) as img:
                                 widths.append(img.width)
                     except Exception as e:
-                        logger.info("[#error_log] ⚠️ 读取图片宽度失败 %s: %s", sample, str(e))
+                        logger.info("[#error_log] ⚠️ 读取图片宽度失败 {}: {}", sample, str(e))
                         continue
         except Exception as e:
-            logger.info("[#error_log] ⚠️ 打开ZIP文件失败: %s", str(e))
+            logger.info("[#error_log] ⚠️ 打开ZIP文件失败: {}", str(e))
             return 0
         if not widths:
             return 0
         return int(sorted(widths)[len(widths)//2])
     except Exception as e:
-        logger.info("[#error_log] ❌ 计算代表宽度失败 %s: %s", archive_path, str(e))
+        logger.info("[#error_log] ❌ 计算代表宽度失败 {}: {}", archive_path, str(e))
         return 0
 def shorten_number_cn(
     number: int, 
@@ -216,7 +216,7 @@ class ReportGenerator:
                 f.write(report_content)
             return report_path
         except Exception as e:
-            logger.error("[#error_log] ❌ 保存报告失败: %s", str(e))
+            logger.error("[#error_log] ❌ 保存报告失败: {}", str(e))
             logger.exception("[#error_log] 异常堆栈:")
             logger.info("[#process] 💥 遇到严重错误，请检查error_log面板")
             return None
@@ -236,7 +236,7 @@ def process_file_with_count(file_path: str, name_only_mode: bool = False) -> Tup
 
     # 如果是仅名称模式，跳过所有内部分析
     if name_only_mode:
-        logger.info("[#name_only] 🏷️ 仅名称模式，跳过内部分析: %s", file_name)
+        logger.info("[#name_only] 🏷️ 仅名称模式，跳过内部分析: {}", file_name)
         # 直接返回原始文件名（已移除{}标记）
         new_name = f"{name}{ext}"
         new_path = os.path.join(dir_name, new_name) if dir_name else new_name
@@ -260,7 +260,7 @@ def process_file_with_count(file_path: str, name_only_mode: bool = False) -> Tup
                         scores.append(ImageClarityEvaluator.calculate_definition(img_data))
                 metrics['clarity_score'] = sum(scores) / len(scores) if scores else 0.0
     except Exception as e:
-        logger.error("[#error_log] 清晰度计算失败 %s: %s", file_path, str(e))
+        logger.error("[#error_log] 清晰度计算失败 {}: {}", file_path, str(e))
     parts = []
     if metrics['width'] > 0:
         parts.append(f"{shorten_number_cn(metrics['width'], use_w=True)}@WD")
@@ -273,17 +273,19 @@ def process_file_with_count(file_path: str, name_only_mode: bool = False) -> Tup
     new_path = os.path.join(dir_name, new_name) if dir_name else new_name
     return file_path, new_path, metrics
 
-def process_file_group(group_files: List[str], base_dir: str, trash_dir: str, create_shortcuts: bool = False, enable_multi_main: bool = False, name_only_mode: bool = False) -> Dict:
+def process_file_group(group_files: List[str], base_dir: str, trash_dir: str, create_shortcuts: bool = False, enable_multi_main: bool = False, name_only_mode: bool = False, trash_only: bool = False) -> Dict:
     from .core.utils import handle_multi_main_file, create_shortcut
     from rawfilter.__main__ import clean_filename, is_in_blacklist, is_chinese_version, has_original_keywords, group_similar_files, safe_move_file
     from rawfilter.run import shorten_number_cn
     from loguru import logger
     result_stats = {'moved_to_trash': 0, 'moved_to_multi': 0, 'created_shortcuts': 0}
+    # 参数调试日志，便于确认 trash_only 等开关是否正确传递
+    logger.info("[#debug] 参数: trash_only={} enable_multi_main={} name_only_mode={} 文件数={}", trash_only, enable_multi_main, name_only_mode, len(group_files))
     group_base_name, _ = clean_filename(group_files[0])
     group_id = abs(hash(group_base_name)) % 10000
     filtered_files = [f for f in group_files if not is_in_blacklist(f)]
     if not filtered_files:
-        logger.info("[#group_info] ⏭️ 组[%s]跳过: 所有文件都在黑名单中", group_base_name)
+        logger.info("[#group_info] ⏭️ 组[{}]跳过: 所有文件都在黑名单中", group_base_name)
         return result_stats
     chinese_versions = []
     other_versions = []
@@ -354,7 +356,7 @@ def process_file_group(group_files: List[str], base_dir: str, trash_dir: str, cr
             try:
                 os.rename(old_full_path, new_full_path)
                 updated_files.append((old_path, new_path))
-                logger.info(f"[#file_ops] ✅ 已重命名: {old_path} -> {new_path}")
+                logger.info("[#file_ops] ✅ 已重命名: {} -> {}", old_path, new_path)
             except Exception as e:
                 logger.error(f"[#error_log] ❌ 重命名失败 {old_path}: {str(e)}")
                 updated_files.append((old_path, old_path))
@@ -376,22 +378,26 @@ def process_file_group(group_files: List[str], base_dir: str, trash_dir: str, cr
             create_shortcut,
         )
     except Exception as e:
-        logger.error(f"[#error_log] 裁剪规则引擎异常: {e}")
+        logger.error("[#error_log] 裁剪规则引擎异常: {}", e)
+
     if chinese_versions:
         if len(chinese_versions) > 1:
-            multi_dir = os.path.join(base_dir, 'multi')
-            os.makedirs(multi_dir, exist_ok=True)
-            if enable_multi_main:
-                main_file = max(chinese_versions, key=lambda x: os.path.getsize(os.path.join(base_dir, x)))
-                if handle_multi_main_file(main_file, base_dir):
-                    logger.info(f"[#file_ops] ✅ 已处理multi-main文件: {main_file}")
-            for file in chinese_versions:
-                src_path = os.path.join(base_dir, file)
-                rel_path = os.path.relpath(src_path, base_dir)
-                dst_path = os.path.join(multi_dir, rel_path)
-                if safe_move_file(src_path, dst_path):
-                    logger.info(f"[#file_ops] ✅ 已移动到multi: {file}")
-                    result_stats['moved_to_multi'] += 1
+            if not trash_only:
+                multi_dir = os.path.join(base_dir, 'multi')
+                os.makedirs(multi_dir, exist_ok=True)
+                if enable_multi_main:
+                    main_file = max(chinese_versions, key=lambda x: os.path.getsize(os.path.join(base_dir, x)))
+                    if handle_multi_main_file(main_file, base_dir):
+                        logger.info("[#file_ops] ✅ 已处理multi-main文件: {}", main_file)
+                for file in chinese_versions:
+                    src_path = os.path.join(base_dir, file)
+                    rel_path = os.path.relpath(src_path, base_dir)
+                    dst_path = os.path.join(multi_dir, rel_path)
+                    if safe_move_file(src_path, dst_path):
+                        logger.info("[#file_ops] ✅ 已移动到multi: {}", file)
+                        result_stats['moved_to_multi'] += 1
+            else:
+                logger.info("[#pruner] 🛑 trash_only 模式：跳过 multi 移动 (汉化多版本共 {} 个)", len(chinese_versions))
             for other_file in other_versions:
                 src_path = os.path.join(base_dir, other_file)
                 rel_path = os.path.relpath(src_path, base_dir)
@@ -399,14 +405,14 @@ def process_file_group(group_files: List[str], base_dir: str, trash_dir: str, cr
                 if create_shortcuts:
                     shortcut_path = os.path.splitext(dst_path)[0]
                     if create_shortcut(src_path, shortcut_path):
-                        logger.info(f"[#file_ops] ✅ 已创建快捷方式: {other_file}")
+                        logger.info("[#file_ops] ✅ 已创建快捷方式: {}", other_file)
                         result_stats['created_shortcuts'] += 1
                 else:
                     if safe_move_file(src_path, dst_path):
-                        logger.info(f"[#file_ops] ✅ 已移动到trash: {other_file}")
+                        logger.info("[#file_ops] ✅ 已移动到trash: {}", other_file)
                         result_stats['moved_to_trash'] += 1
         else:
-            logger.info(f"[#group_info] 🔍 组[{group_base_name}]处理: 发现1个需要保留的版本，保持原位置")
+            logger.info("[#group_info] 🔍 组[{}]处理: 发现1个需要保留的版本，保持原位置", group_base_name)
             for other_file in other_versions:
                 src_path = os.path.join(base_dir, other_file)
                 rel_path = os.path.relpath(src_path, base_dir)
@@ -414,33 +420,36 @@ def process_file_group(group_files: List[str], base_dir: str, trash_dir: str, cr
                 if create_shortcuts:
                     shortcut_path = os.path.splitext(dst_path)[0]
                     if create_shortcut(src_path, shortcut_path):
-                        logger.info(f"[#file_ops] ✅ 已创建快捷方式: {other_file}")
+                        logger.info("[#file_ops] ✅ 已创建快捷方式: {}", other_file)
                         result_stats['created_shortcuts'] += 1
                 else:
                     if safe_move_file(src_path, dst_path):
-                        logger.info(f"[#file_ops] ✅ 已移动到trash: {other_file}")
+                        logger.info("[#file_ops] ✅ 已移动到trash: {}", other_file)
                         result_stats['moved_to_trash'] += 1
     else:
         if len(other_versions) > 1:
-            multi_dir = os.path.join(base_dir, 'multi')
-            os.makedirs(multi_dir, exist_ok=True)
-            if enable_multi_main:
-                main_file = max(other_versions, key=lambda x: os.path.getsize(os.path.join(base_dir, x)))
-                if handle_multi_main_file(main_file, base_dir):
-                    logger.info(f"[#file_ops] ✅ 已处理multi-main文件: {main_file}")
-            for file in other_versions:
-                src_path = os.path.join(base_dir, file)
-                rel_path = os.path.relpath(src_path, base_dir)
-                dst_path = os.path.join(multi_dir, rel_path)
-                if safe_move_file(src_path, dst_path):
-                    logger.info(f"[#file_ops] ✅ 已移动到multi: {file}")
-                    result_stats['moved_to_multi'] += 1
-            logger.info(f"[#group_info] 🔍 组[{group_base_name}]处理: 未发现汉化版本，发现{len(other_versions)}个原版，已移动到multi")
+            if not trash_only:
+                multi_dir = os.path.join(base_dir, 'multi')
+                os.makedirs(multi_dir, exist_ok=True)
+                if enable_multi_main:
+                    main_file = max(other_versions, key=lambda x: os.path.getsize(os.path.join(base_dir, x)))
+                    if handle_multi_main_file(main_file, base_dir):
+                        logger.info("[#file_ops] ✅ 已处理multi-main文件: {}", main_file)
+                for file in other_versions:
+                    src_path = os.path.join(base_dir, file)
+                    rel_path = os.path.relpath(src_path, base_dir)
+                    dst_path = os.path.join(multi_dir, rel_path)
+                    if safe_move_file(src_path, dst_path):
+                        logger.info("[#file_ops] ✅ 已移动到multi: {}", file)
+                        result_stats['moved_to_multi'] += 1
+                logger.info("[#group_info] 🔍 组[{}]处理: 未发现汉化版本，发现{}个原版，已移动到multi", group_base_name, len(other_versions))
+            else:
+                logger.info("[#pruner] 🛑 trash_only 模式：跳过 multi 移动 (原版多版本共 {} 个)", len(other_versions))
         else:
-            logger.info(f"[#group_info] 🔍 组[{group_base_name}]处理: 未发现汉化版本，仅有1个原版，保持原位置")
+            logger.info("[#group_info] 🔍 组[{}]处理: 未发现汉化版本，仅有1个原版，保持原位置", group_base_name)
     return result_stats
 
-def process_directory(directory: str, report_generator: ReportGenerator, dry_run: bool = False, create_shortcuts: bool = False, enable_multi_main: bool = False, name_only_mode: bool = False) -> None:
+def process_directory(directory: str, report_generator: ReportGenerator, dry_run: bool = False, create_shortcuts: bool = False, enable_multi_main: bool = False, name_only_mode: bool = False, trash_only: bool = False) -> None:
     from rawfilter.__main__ import group_similar_files
     from loguru import logger
     import os
@@ -448,22 +457,24 @@ def process_directory(directory: str, report_generator: ReportGenerator, dry_run
     if not dry_run:
         os.makedirs(trash_dir, exist_ok=True)
     all_files = []
-    logger.info("[#process] 🔍 正在扫描文件...")
+    logger.info("[#process] 🔍 正在扫描目录: {}", directory)
     for root, _, files in os.walk(directory):
         if 'trash' in root or 'multi' in root:
-            logger.info("[#file_ops] ⏭️ 跳过目录: %s", root)
+            logger.info("[#file_ops] ⏭️ 跳过目录: {}", root)
             continue
         for file in files:
             if os.path.splitext(file.lower())[1] in ARCHIVE_EXTENSIONS:
                 rel_path = os.path.relpath(os.path.join(root, file), directory)
                 all_files.append(rel_path)
-                logger.info("[@process] 扫描进度: %d/%d", len(all_files), len(all_files))
+                total = len(all_files)
+                if total % 10 == 0:
+                    logger.info("[@process] 扫描进度: {} / {}", total, total)
     if not all_files:
-        logger.info("[#error_log] ⚠️ 目录 %s 中未找到压缩文件", directory)
+        logger.info("[#error_log] ⚠️ 目录 {} 中未找到压缩文件", directory)
         return
     report_generator.update_stats('total_files', len(all_files))
     groups = group_similar_files(all_files)
-    logger.info("[#stats] 📊 总计: %d个文件, %d个组", len(all_files), len(groups))
+    logger.info("[#stats] 📊 总计: {} 个文件, {} 个组", len(all_files), len(groups))
     report_generator.update_stats('total_groups', len(groups))
     logger.info("[#process] 🔄 开始处理文件组...")
     from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -479,7 +490,8 @@ def process_directory(directory: str, report_generator: ReportGenerator, dry_run
                     trash_dir,
                     create_shortcuts,
                     enable_multi_main,
-                    name_only_mode
+                    name_only_mode,
+                    trash_only,
                 )
                 futures[future] = group_base_name
         completed = 0

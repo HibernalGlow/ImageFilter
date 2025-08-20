@@ -1,0 +1,9 @@
+{
+  "pruner": {
+    "rules": [
+      { "type": "version" },
+      { "type": "keyword", "keywords": ["无修", "無修", "uncensor", "无码", "無碼", "去码"], "scope": "chinese", "keep_matching": true },
+      { "type": "keyword", "keywords": ["dl","dlsite", "dl版", "DL", "DL版"], "scope": "chinese", "keep_matching": true }
+    ]
+  }
+}
