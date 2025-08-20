@@ -9,7 +9,7 @@ from typing import List, Dict, Set, Tuple, Optional, Union
 from PIL import Image
 from hashu.core.calculate_hash_custom import ImageClarityEvaluator
 from loguru import logger
-from .utils import (
+from .core.utils import (
     handle_multi_main_file, create_shortcut
 )
 
@@ -274,7 +274,7 @@ def process_file_with_count(file_path: str, name_only_mode: bool = False) -> Tup
     return file_path, new_path, metrics
 
 def process_file_group(group_files: List[str], base_dir: str, trash_dir: str, create_shortcuts: bool = False, enable_multi_main: bool = False, name_only_mode: bool = False) -> Dict:
-    from .utils import handle_multi_main_file, create_shortcut
+    from .core.utils import handle_multi_main_file, create_shortcut
     from rawfilter.__main__ import clean_filename, is_in_blacklist, is_chinese_version, has_original_keywords, group_similar_files, safe_move_file
     from rawfilter.run import shorten_number_cn
     from loguru import logger
@@ -361,33 +361,22 @@ def process_file_group(group_files: List[str], base_dir: str, trash_dir: str, cr
     chinese_versions = [new_path for old_path, new_path in updated_files if old_path in chinese_versions]
     other_versions = [new_path for old_path, new_path in updated_files if old_path in other_versions]
 
-    # 统一调用公共版本裁剪逻辑
-    from .version_pruner import prune_version_files
-    chinese_versions, other_versions = prune_version_files(
-        chinese_versions,
-        other_versions,
-        base_dir,
-        trash_dir,
-        result_stats,
-        safe_move_file,
-        logger
-    )
-    # 追加无修正优先裁剪
-    if chinese_versions:
-        try:
-            from .uncensored_pruner import prune_uncensored_chinese
-            chinese_versions = prune_uncensored_chinese(
-                chinese_versions,
-                base_dir,
-                trash_dir,
-                result_stats,
-                safe_move_file,
-                logger,
-                create_shortcuts,
-                create_shortcut
-            )
-        except Exception as e:
-            logger.error(f"[#error_log] 无修正裁剪阶段异常: {e}")
+    # 统一调用可配置的裁剪规则引擎（版本号 -> 无修正 -> DL 等）
+    try:
+        from .core.pruner import apply_prune_rules
+        chinese_versions, other_versions = apply_prune_rules(
+            chinese_versions,
+            other_versions,
+            base_dir,
+            trash_dir,
+            result_stats,
+            safe_move_file,
+            logger,
+            create_shortcuts,
+            create_shortcut,
+        )
+    except Exception as e:
+        logger.error(f"[#error_log] 裁剪规则引擎异常: {e}")
     if chinese_versions:
         if len(chinese_versions) > 1:
             multi_dir = os.path.join(base_dir, 'multi')

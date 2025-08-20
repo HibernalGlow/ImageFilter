@@ -869,34 +869,22 @@ def process_file_group(group_files: List[str], base_dir: str, trash_dir: str, cr
     chinese_versions = [new_path for old_path, new_path in updated_files if old_path in chinese_versions]
     other_versions = [new_path for old_path, new_path in updated_files if old_path in other_versions]
 
-    # 统一调用公共版本裁剪逻辑
-    from .version_pruner import prune_version_files
-    chinese_versions, other_versions = prune_version_files(
-        chinese_versions,
-        other_versions,
-        base_dir,
-        trash_dir,
-        result_stats,
-        safe_move_file,
-        logger
-    )
-
-    # 追加无修正优先裁剪 (仅针对已经筛出的 chinese_versions)
-    if chinese_versions:
-        try:
-            from .uncensored_pruner import prune_uncensored_chinese
-            chinese_versions = prune_uncensored_chinese(
-                chinese_versions,
-                base_dir,
-                trash_dir,
-                result_stats,
-                safe_move_file,
-                logger,
-                create_shortcuts,
-                create_shortcut if 'create_shortcut' in globals() else None,
-            )
-        except Exception as e:
-            logger.error("[#error_log] 无修正裁剪阶段异常: {}", e)
+    # 统一调用可配置的裁剪规则引擎（版本号 -> 无修正 -> DL 等）
+    try:
+        from .core.pruner import apply_prune_rules
+        chinese_versions, other_versions = apply_prune_rules(
+            chinese_versions,
+            other_versions,
+            base_dir,
+            trash_dir,
+            result_stats,
+            safe_move_file,
+            logger,
+            create_shortcuts,
+            create_shortcut if 'create_shortcut' in globals() else None,
+        )
+    except Exception as e:
+        logger.error("[#error_log] 裁剪规则引擎异常: {}", e)
     
     # 处理文件移动逻辑
     if chinese_versions:

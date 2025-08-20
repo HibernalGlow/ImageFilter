@@ -1,6 +1,6 @@
 import argparse
 from .run import process_directory, ReportGenerator
-from .utils import process_paths, get_paths_from_clipboard
+from .core.utils import process_paths, get_paths_from_clipboard
 from loguru import logger
 import sys
 
