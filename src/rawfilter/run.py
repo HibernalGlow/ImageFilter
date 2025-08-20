@@ -372,6 +372,22 @@ def process_file_group(group_files: List[str], base_dir: str, trash_dir: str, cr
         safe_move_file,
         logger
     )
+    # 追加无修正优先裁剪
+    if chinese_versions:
+        try:
+            from .uncensored_pruner import prune_uncensored_chinese
+            chinese_versions = prune_uncensored_chinese(
+                chinese_versions,
+                base_dir,
+                trash_dir,
+                result_stats,
+                safe_move_file,
+                logger,
+                create_shortcuts,
+                create_shortcut
+            )
+        except Exception as e:
+            logger.error(f"[#error_log] 无修正裁剪阶段异常: {e}")
     if chinese_versions:
         if len(chinese_versions) > 1:
             multi_dir = os.path.join(base_dir, 'multi')

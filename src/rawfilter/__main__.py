@@ -880,6 +880,23 @@ def process_file_group(group_files: List[str], base_dir: str, trash_dir: str, cr
         safe_move_file,
         logger
     )
+
+    # 追加无修正优先裁剪 (仅针对已经筛出的 chinese_versions)
+    if chinese_versions:
+        try:
+            from .uncensored_pruner import prune_uncensored_chinese
+            chinese_versions = prune_uncensored_chinese(
+                chinese_versions,
+                base_dir,
+                trash_dir,
+                result_stats,
+                safe_move_file,
+                logger,
+                create_shortcuts,
+                create_shortcut if 'create_shortcut' in globals() else None,
+            )
+        except Exception as e:
+            logger.error("[#error_log] 无修正裁剪阶段异常: {}", e)
     
     # 处理文件移动逻辑
     if chinese_versions:
