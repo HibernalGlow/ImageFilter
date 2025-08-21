@@ -4,6 +4,7 @@ import time
 import subprocess
 import tempfile
 from dataclasses import dataclass
+import os
 from typing import Any, Dict, List
 from pathlib import Path
 import requests
@@ -79,12 +80,14 @@ class CommandUmiOCRClient:
         extra_args: List[str] | None = None,
         hide: bool = False,
         mode: str = "file",
+        enforce_utf8: bool = True,
     ):
         self.exe_path = exe_path
         self.timeout = timeout
         self.extra_args = extra_args or []
         self.hide = hide
         self.mode = mode if mode in {"file", "stdout", "clip"} else "file"
+        self.enforce_utf8 = enforce_utf8
 
     def ocr_image(self, image_path: str | Path) -> List[OCRResult]:
         p = Path(image_path)
@@ -162,7 +165,26 @@ class CommandUmiOCRClient:
 
     def _run(self, cmd: List[str]):
         try:
-            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=self.timeout)
+            # 构造环境，必要时强制 UTF-8，避免下游 Python 程序在 GBK 控制台下打印非 GBK 字符崩溃
+            env = None
+            if self.enforce_utf8:
+                env = os.environ.copy()
+                # PYTHONUTF8=1 启用 UTF-8 模式；PYTHONIOENCODING 确保 stdout/stderr 使用 utf-8
+                env.setdefault("PYTHONUTF8", "1")
+                env.setdefault("PYTHONIOENCODING", "utf-8")
+                # 一些程序会参考 LANG / LC_ALL
+                env.setdefault("LANG", "C.UTF-8")
+                env.setdefault("LC_ALL", "C.UTF-8")
+                # Windows 终端代码页不一定被改变，但子进程 Python 会转为 UTF-8
+            proc = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=self.timeout,
+                env=env,
+                encoding="utf-8",
+                errors="replace",  # 避免因个别字节解码失败整体报错
+            )
         except FileNotFoundError:  # noqa: BLE001
             logger.error(f"找不到 Umi-OCR 可执行文件: {self.exe_path}")
             return None

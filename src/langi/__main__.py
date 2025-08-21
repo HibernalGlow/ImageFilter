@@ -15,7 +15,7 @@ console = Console()
 app = typer.Typer(add_completion=False, help="图片主要语言识别 (调用本地 Umi-OCR 可执行文件)")
 
 def _run(paths: List[Path], output: Path | None, no_rename: bool, interactive: bool, hide: bool, raw: bool,
-        mode: str, min_total: int, min_lang: int, min_prop: float):
+         mode: str, min_total: int, min_lang: int, min_prop: float, workers: int, utf8: bool):
     LanguageHeuristics.configure(min_total=min_total, min_lang=min_lang, min_prop=min_prop)
     all_files: List[Path] = []
     exts = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff", ".avif", ".jxl"}
@@ -30,7 +30,7 @@ def _run(paths: List[Path], output: Path | None, no_rename: bool, interactive: b
     if not all_files:
         typer.echo("未找到图片文件")
         raise typer.Exit(code=1)
-    client = CommandUmiOCRClient(hide=hide, mode=mode.lower())
+    client = CommandUmiOCRClient(hide=hide, mode=mode.lower(), enforce_utf8=utf8)
 
     file_list = [str(p) for p in all_files]
     results = []
@@ -51,7 +51,7 @@ def _run(paths: List[Path], output: Path | None, no_rename: bool, interactive: b
             def _cb(idx: int, total: int, path: str):  # noqa: D401
                 progress.update(task_id, advance=1, description=f"OCR {idx}/{total}")
             results = batch_detect(file_list, client=client, rename=not no_rename,
-                                   suffix_map=DEFAULT_SUFFIX_MAP, output_json=None, progress=_cb)
+                                   suffix_map=DEFAULT_SUFFIX_MAP, output_json=None, progress=_cb, workers=workers)
         # 表格展示
         table = Table(title="识别结果", show_lines=False)
         table.add_column("#", justify="right", style="cyan", no_wrap=True)
@@ -67,8 +67,14 @@ def _run(paths: List[Path], output: Path | None, no_rename: bool, interactive: b
                           Path(info.get("renamed_path", info["path"])).name)
         console.print(table)
     else:
-        results = batch_detect(file_list, client=client, rename=not no_rename,
-                               suffix_map=DEFAULT_SUFFIX_MAP, output_json=None)
+        results = batch_detect(
+            file_list,
+            client=client,
+            rename=not no_rename,
+            suffix_map=DEFAULT_SUFFIX_MAP,
+            output_json=None,
+            workers=workers,
+        )
 
     # 输出 JSON（文件 + 控制台）
     if output:
@@ -101,11 +107,13 @@ def detect_cmd(
     hide: bool = typer.Option(False, "--hide", help="调用 Umi-OCR 时附加 --hide"),
     raw: bool = typer.Option(False, "--raw", help="只输出 JSON，不显示表格/额外文字"),
     mode: str = typer.Option("stdout", "--mode", help="调用模式: stdout|file|clip", case_sensitive=False),
+    workers: int = typer.Option(1, "--workers", help="并发 worker 数(>1 开启并发)"),
+    utf8: bool = typer.Option(True, "--no-utf8", flag_value=False, help="关闭对子进程 UTF-8 强制 (默认开启)"),
     min_total: int = typer.Option(5, "--min-total", help="最少总字符数"),
     min_lang: int = typer.Option(3, "--min-lang", help="某语言最少字符数"),
     min_prop: float = typer.Option(0.5, "--min-prop", help="某语言最少占比(0-1)"),
 ):
-    _run(paths, output, no_rename, interactive, hide, raw, mode, min_total, min_lang, min_prop)
+    _run(paths, output, no_rename, interactive, hide, raw, mode, min_total, min_lang, min_prop, workers, utf8)
 
 
 def main():  # 供入口点

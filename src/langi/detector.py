@@ -4,6 +4,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Sequence, Tuple, Optional
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from loguru import logger
 
 from .client import CommandUmiOCRClient, OCRResult
@@ -33,10 +34,15 @@ class LanguageHeuristics:
         "unknown": 0,
     }
 
-    # 扩展中文匹配：基本区、扩展A、兼容表意、以及高位扩展(B~F常用范围子集)
+    # 中文匹配：基本区、扩展A、兼容表意、以及高位扩展(B~F常用范围子集)
     CHINESE_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\U00020000-\U0002A6DF]")
-    JAPANESE_RE = re.compile(r"[\u3040-\u30ff\u3400-\u4dbf]")
+    # 假名 (日文特有脚本)：平假名 + 片假名
+    JAPANESE_KANA_RE = re.compile(r"[\u3040-\u309f\u30a0-\u30ff]")
     ENGLISH_RE = re.compile(r"[A-Za-z]")
+    # 日文常见标点/符号/全角装饰
+    JP_PUNCT_RE = re.compile(r"[「」『』【】〈〉《》〔〕（）。？！…～・ー＝：；＋＊★☆※→⇒◎◇◆△▽▼▲○●❖■□“”]")
+    # 高频功能词/语尾 (粗糙匹配，只做提示，避免过拟合；不做严格分词)
+    JP_PARTICLE_RE = re.compile(r"(の|です|ます|でした|ません|して|した|してい|してる|ない|たい|だった|から|けど|けれど|ても|もの|こと|よう|では|には|には|には|には|って)")
 
     # 默认阈值，可被 CLI 覆盖
     MIN_TOTAL_CHARS: int = 5       # 去除空白后最少总字符
@@ -62,28 +68,52 @@ class LanguageHeuristics:
         compact = re.sub(r"\s+", "", text)
         if len(compact) < cls.MIN_TOTAL_CHARS:
             return "unknown"
-        c = len(cls.CHINESE_RE.findall(compact))
-        j = len(cls.JAPANESE_RE.findall(compact))
+        c = len(cls.CHINESE_RE.findall(compact))  # 汉字 (中日公用 + 中专用)
+        kana = len(cls.JAPANESE_KANA_RE.findall(compact))  # 假名
         e = len(cls.ENGLISH_RE.findall(compact))
-        if c == j == e == 0:
+        if c == kana == e == 0:
             return "unknown"
 
-        # 若存在中文字符，且中文字符占 (中+英) 的比例 >= 0.3，则直接视为中文，避免繁体字 + 少量英文字母被误判
-        if c > 0 and (c / max(c + e, 1)) >= 0.30 and c >= e:
-            return "chinese"
+        # 日文特征评分：假名 + 标点 + 语法功能词
+        jp_punct = len(cls.JP_PUNCT_RE.findall(compact))
+        jp_particles = len(cls.JP_PARTICLE_RE.findall(compact))
+        # 计算一个简单分数：假名数 *1 + 标点*2 + 功能词*4
+        jp_score = kana + jp_punct * 2 + jp_particles * 4
+        kana_ratio = kana / max(c + kana, 1)
 
-        counts = {"chinese": c, "japanese": j, "english": e}
-        max_count = max(counts.values())
-        candidates = [k for k, v in counts.items() if v == max_count and v > 0]
-        if len(candidates) == 1:
-            winner = candidates[0]
+        # 判定为日文的条件（任一满足即可）：
+        # 1) 假名占 (汉字+假名) 比例 >= 3% 且 假名 >=2
+        # 2) 假名 >=1 且 日文特征分 >= 6
+        # 3) 功能词 >=2
+        japanese_likely = (
+            (kana >= 2 and kana_ratio >= 0.03) or
+            (kana >= 1 and jp_score >= 6) or
+            (jp_particles >= 2)
+        )
+
+        # 若疑似日文且假名存在，则优先判为日文（即使汉字多，日文文本常以汉字为主，假名辅助）
+        if japanese_likely and kana >= 1:
+            winner = "japanese"
+            w_count = kana  # 使用假名计数做阈值校验
         else:
-            if c > 0 and any(k != "chinese" for k in candidates) and c >= 0.9 * max_count:
+            # 中文偏向策略：假名较少或无假名时，如果汉字占 (汉字+英字) >=30% 且 >= 英文，则视为中文
+            if c > 0 and (c / max(c + e, 1)) >= 0.30 and c >= e:
                 winner = "chinese"
+                w_count = c
             else:
-                winner = max(candidates, key=lambda x: cls.LANGUAGE_PRIORITY.get(x, 0))
-        counts = {"chinese": c, "japanese": j, "english": e}
-        w_count = counts.get(winner, 0)
+                # 传统三语言竞争：把假名视为日文的主体字符数
+                counts = {"chinese": c, "japanese": kana, "english": e}
+                max_count = max(counts.values())
+                candidates = [k for k, v in counts.items() if v == max_count and v > 0]
+                if len(candidates) == 1:
+                    winner = candidates[0]
+                else:
+                    if c > 0 and any(k != "chinese" for k in candidates) and c >= 0.9 * max_count:
+                        winner = "chinese"
+                    else:
+                        winner = max(candidates, key=lambda x: cls.LANGUAGE_PRIORITY.get(x, 0))
+                w_count = counts.get(winner, 0)
+
         if w_count < cls.MIN_LANG_CHARS:
             return "unknown"
         if (w_count / len(compact)) < cls.MIN_LANG_PROPORTION:
@@ -137,28 +167,49 @@ def batch_detect(
     suffix_map: Dict[str, str] | None = None,
     output_json: str | None = None,
     progress: callable | None = None,
+    workers: int | None = None,
 ) -> List[Dict]:
     if client is None:
         client = CommandUmiOCRClient()
     suffix_map = {**DEFAULT_SUFFIX_MAP, **(suffix_map or {})}
-    results: List[Dict] = []
+    results: List[Dict] = [None] * len(paths)  # type: ignore
     total = len(paths)
-    for idx, p in enumerate(paths, 1):
-        if progress:
-            try:
-                progress(idx, total, str(p))
-            except Exception:  # noqa: BLE001
-                pass
+
+    def _task(index_path: Tuple[int, str | Path]):
+        idx, p = index_path
         info = detect_image_language(p, client)
         if rename and not info.get("error"):
             suffix = suffix_map.get(info["language"], suffix_map["unknown"])
             new_path = _rename_with_suffix(Path(info["path"]), suffix)
             info["renamed_path"] = str(new_path)
-        results.append(info)
+        return idx, info
+
+    if workers is None or workers <= 1:
+        for idx, p in enumerate(paths, 1):
+            if progress:
+                try:
+                    progress(idx, total, str(p))
+                except Exception:  # noqa: BLE001
+                    pass
+            _, info = _task((idx - 1, p))
+            results[idx - 1] = info
+    else:
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            future_map = {executor.submit(_task, (i, p)): i for i, p in enumerate(paths)}
+            done_count = 0
+            for fut in as_completed(future_map):
+                i, info = fut.result()
+                results[i] = info
+                done_count += 1
+                if progress:
+                    try:
+                        progress(done_count, total, str(paths[i]))
+                    except Exception:  # noqa: BLE001
+                        pass
     if output_json:
         try:
             with open(output_json, "w", encoding="utf-8") as f:
                 json.dump(results, f, ensure_ascii=False, indent=2)
         except Exception as e:  # noqa: BLE001
             logger.error(f"写出 JSON 失败 {output_json}: {e}")
-    return results
+    return results  # type: ignore
