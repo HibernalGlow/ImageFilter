@@ -38,6 +38,20 @@ class LanguageHeuristics:
     JAPANESE_RE = re.compile(r"[\u3040-\u30ff\u3400-\u4dbf]")
     ENGLISH_RE = re.compile(r"[A-Za-z]")
 
+    # 默认阈值，可被 CLI 覆盖
+    MIN_TOTAL_CHARS: int = 5       # 去除空白后最少总字符
+    MIN_LANG_CHARS: int = 3        # 目标语言最少字符
+    MIN_LANG_PROPORTION: float = 0.5  # 目标语言在全部字符中最小占比
+
+    @classmethod
+    def configure(cls, min_total: int | None = None, min_lang: int | None = None, min_prop: float | None = None):
+        if min_total is not None:
+            cls.MIN_TOTAL_CHARS = max(1, min_total)
+        if min_lang is not None:
+            cls.MIN_LANG_CHARS = max(1, min_lang)
+        if min_prop is not None:
+            cls.MIN_LANG_PROPORTION = max(0.0, min(1.0, min_prop))
+
     @classmethod
     def detect(cls, text: str) -> str:
         if not text.strip():
@@ -45,9 +59,12 @@ class LanguageHeuristics:
         lib_lang = detect_language_lib(text)
         if lib_lang:
             return lib_lang
-        c = len(cls.CHINESE_RE.findall(text))
-        j = len(cls.JAPANESE_RE.findall(text))
-        e = len(cls.ENGLISH_RE.findall(text))
+        compact = re.sub(r"\s+", "", text)
+        if len(compact) < cls.MIN_TOTAL_CHARS:
+            return "unknown"
+        c = len(cls.CHINESE_RE.findall(compact))
+        j = len(cls.JAPANESE_RE.findall(compact))
+        e = len(cls.ENGLISH_RE.findall(compact))
         if c == j == e == 0:
             return "unknown"
 
@@ -59,11 +76,19 @@ class LanguageHeuristics:
         max_count = max(counts.values())
         candidates = [k for k, v in counts.items() if v == max_count and v > 0]
         if len(candidates) == 1:
-            return candidates[0]
-        # 并列 -> 若包含中文且中文数量接近最大(>=90%最大值)也偏向中文
-        if c > 0 and any(k != "chinese" for k in candidates) and c >= 0.9 * max_count:
-            return "chinese"
-        return max(candidates, key=lambda x: cls.LANGUAGE_PRIORITY.get(x, 0))
+            winner = candidates[0]
+        else:
+            if c > 0 and any(k != "chinese" for k in candidates) and c >= 0.9 * max_count:
+                winner = "chinese"
+            else:
+                winner = max(candidates, key=lambda x: cls.LANGUAGE_PRIORITY.get(x, 0))
+        counts = {"chinese": c, "japanese": j, "english": e}
+        w_count = counts.get(winner, 0)
+        if w_count < cls.MIN_LANG_CHARS:
+            return "unknown"
+        if (w_count / len(compact)) < cls.MIN_LANG_PROPORTION:
+            return "unknown"
+        return winner
 
 
 def _aggregate_text(results: Sequence[OCRResult]) -> str:

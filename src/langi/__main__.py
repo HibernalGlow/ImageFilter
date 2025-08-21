@@ -9,21 +9,14 @@ from rich.table import Table
 from rich.panel import Panel
 
 from .client import CommandUmiOCRClient
-from .detector import batch_detect, DEFAULT_SUFFIX_MAP
+from .detector import batch_detect, DEFAULT_SUFFIX_MAP, LanguageHeuristics
 
 console = Console()
 app = typer.Typer(add_completion=False, help="图片主要语言识别 (调用本地 Umi-OCR 可执行文件)")
 
-@app.command()
-def detect(
-    paths: List[Path] = typer.Argument(..., exists=True, readable=True, resolve_path=True, help="图片文件或目录，可多个"),
-    output: Path = typer.Option(None, "-o", "--output", help="结果写出 JSON 文件"),
-    no_rename: bool = typer.Option(False, "--no-rename", help="不对文件重命名"),
-    interactive: bool = typer.Option(True, "--no-interactive", flag_value=False, help="关闭交互式 Rich 输出"),
-    hide: bool = typer.Option(False, "--hide", help="调用 Umi-OCR 时附加 --hide"),
-    raw: bool = typer.Option(False, "--raw", help="只输出 JSON，不显示表格/额外文字"),
-):
-    """识别图片主要语言，重命名并输出 JSON。"""
+def _run(paths: List[Path], output: Path | None, no_rename: bool, interactive: bool, hide: bool, raw: bool,
+        mode: str, min_total: int, min_lang: int, min_prop: float):
+    LanguageHeuristics.configure(min_total=min_total, min_lang=min_lang, min_prop=min_prop)
     all_files: List[Path] = []
     exts = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff", ".avif", ".jxl"}
     for p in paths:
@@ -37,7 +30,7 @@ def detect(
     if not all_files:
         typer.echo("未找到图片文件")
         raise typer.Exit(code=1)
-    client = CommandUmiOCRClient(hide=hide)
+    client = CommandUmiOCRClient(hide=hide, mode=mode.lower())
 
     file_list = [str(p) for p in all_files]
     results = []
@@ -87,6 +80,32 @@ def detect(
             console.print(f"[red]写入 JSON 失败: {e}[/]")
     # 最终标准输出 JSON（raw 模式仅这一行）
     typer.echo(json.dumps(results, ensure_ascii=False, indent=2))
+
+@app.callback()
+def main_cb():
+    """图片主要语言识别工具。使用命令:
+
+    langi detect <图片或文件夹...> [选项]
+
+    通过 'langi detect --help' 查看参数。
+    """
+    # 不解析位置参数，避免与子命令冲突
+    return
+
+@app.command("detect")
+def detect_cmd(
+    paths: List[Path] = typer.Argument(..., exists=True, readable=True, resolve_path=True, help="图片文件或目录，可多个"),
+    output: Path = typer.Option(None, "-o", "--output", help="结果写出 JSON 文件"),
+    no_rename: bool = typer.Option(False, "--no-rename", help="不对文件重命名"),
+    interactive: bool = typer.Option(True, "--no-interactive", flag_value=False, help="关闭交互式 Rich 输出"),
+    hide: bool = typer.Option(False, "--hide", help="调用 Umi-OCR 时附加 --hide"),
+    raw: bool = typer.Option(False, "--raw", help="只输出 JSON，不显示表格/额外文字"),
+    mode: str = typer.Option("stdout", "--mode", help="调用模式: stdout|file|clip", case_sensitive=False),
+    min_total: int = typer.Option(5, "--min-total", help="最少总字符数"),
+    min_lang: int = typer.Option(3, "--min-lang", help="某语言最少字符数"),
+    min_prop: float = typer.Option(0.5, "--min-prop", help="某语言最少占比(0-1)"),
+):
+    _run(paths, output, no_rename, interactive, hide, raw, mode, min_total, min_lang, min_prop)
 
 
 def main():  # 供入口点
