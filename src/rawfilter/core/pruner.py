@@ -67,6 +67,8 @@ def apply_prune_rules(
     if rules is None:
         cfg = get_pruner_config(logger) or {}
         rules = (cfg.get('rules') if isinstance(cfg.get('rules'), list) else None)
+    else:
+        cfg = get_pruner_config(logger) or {}
     if rules is None:
         # 默认规则顺序：版本号 -> 无修正(优先保留匹配) -> DL(优先保留匹配)
         rules = [
@@ -74,6 +76,19 @@ def apply_prune_rules(
             {"type": "keyword", "keywords": DEFAULT_UNCENSORED_KEYWORDS, "scope": "chinese", "keep_matching": True},
             {"type": "keyword", "keywords": DEFAULT_DL_KEYWORDS, "scope": "chinese", "keep_matching": True},
         ]
+
+    # 读取最少保留数（防止组被清空），默认 1
+    try:
+        min_keep = int((cfg or {}).get('min_keep', 1))
+    except Exception:
+        min_keep = 1
+
+    # 仅对 multi 组生效：如果这一组总数 <= min_keep，直接返回（查漏补缺的目标是“同组多件只留一件”）
+    def _total_count() -> int:
+        return len(chinese_versions) + len(other_versions)
+
+    if _total_count() <= max(0, min_keep):
+        return chinese_versions, other_versions
 
     # 合并两类用于某些规则的处理
     for rule in rules:
@@ -139,6 +154,13 @@ def apply_prune_rules(
                 if not matched:
                     continue
 
+                # 仅在“中文作用域+丢弃匹配项”场景下，当中文版本数量 ≤ min_keep 时，跳过该规则，避免把最后保留数内的中文丢弃
+                if scope in ('chinese',) and not keep_matching and len(chinese_versions) <= max(0, min_keep):
+                    continue
+                # 对 other 作用域同样保护，避免把整个组清空到小于 min_keep
+                if scope in ('other',) and not keep_matching and len(other_versions) <= max(0, min_keep):
+                    continue
+
                 # 根据 keep_matching 决定保留或丢弃匹配项
                 if keep_matching:
                     # 语义：只保留匹配项（无论匹配数1还是>1）
@@ -146,6 +168,13 @@ def apply_prune_rules(
                 else:
                     # 语义：丢弃匹配项
                     to_trash = matched
+
+                # 保护：若执行该规则后会把组清空（multi 组必须至少保留 1 个），则跳过该规则
+                # 计算这一规则影响到的条目数量
+                to_trash_set = set(to_trash)
+                remain_after = _total_count() - sum(1 for p, _ in targets if p in to_trash_set)
+                if remain_after < max(0, min_keep):
+                    continue
 
                 # 执行移动并从列表中移除
                 for rel_path in to_trash:

@@ -90,11 +90,11 @@ def main(
             trash_only=trash_only,
         )
         logger.info("[#process] ✨ 目录处理完成: {}", p)
-        rpt = report_generator.save_report(p, report) if report else report_generator.save_report(p)
-        if rpt:
-            logger.info("[#process] 📝 报告已保存到: {}", rpt)
-        else:
-            logger.info("[#error_log] ❌ 保存报告失败")
+        # rpt = report_generator.save_report(p, report) if report else report_generator.save_report(p)
+        # if rpt:
+        #     logger.info("[#process] 📝 报告已保存到: {}", rpt)
+        # else:
+        #     logger.info("[#error_log] ❌ 保存报告失败")
 
 @app.command(help="启动 Taskfile (lata) TUI 界面")
 def tui() -> None:
