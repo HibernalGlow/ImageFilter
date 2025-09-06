@@ -488,7 +488,7 @@ if __name__ == "__main__":
     
     
     # 交互式输入路径
-    folder = Prompt.ask("请输入图片文件夹路径", default="E:\\2EHV\\test")
+    folder = Prompt.ask("请输入图片文件夹路径", default="E:\\1Hub\\EH\\2EHV\\test")
     
     # 交互式选择哈希尺寸
     hash_sizes_input = Prompt.ask("请输入要测试的哈希尺寸（用逗号分隔）", default="10,12,16")

@@ -349,7 +349,7 @@ def generate_html_report(results, image_files, output_path="mobilenet_similarity
 
 if __name__ == "__main__":
     # 交互式输入路径
-    folder = Prompt.ask("请输入图片文件夹路径", default="E:\\2EHV\\test")
+    folder = Prompt.ask("请输入图片文件夹路径", default="E:\\1Hub\\EH\\2EHV\\test")
     
     # 询问是否保存/加载特征向量
     save_features_choice = Prompt.ask("是否保存特征向量到文件？(y/n)", default="y")

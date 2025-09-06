@@ -1,7 +1,3 @@
-"""
-图片哈希计算模块
-提供多种图片哈希计算方法和相似度比较功能
-"""
 from hashu.log import logger
 
 from PIL import Image

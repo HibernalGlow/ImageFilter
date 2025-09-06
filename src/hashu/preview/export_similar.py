@@ -44,7 +44,7 @@ def main():
 def run_full_analysis():
     """运行完整的哈希分析并导出相似组"""
     # 输入参数
-    folder = Prompt.ask("请输入图片文件夹路径", default="E:\\2EHV\\test")
+    folder = Prompt.ask("请输入图片文件夹路径", default="E:\\1Hub\\EH\\2EHV\\test")
     hash_size = int(Prompt.ask("请输入哈希尺寸", default="16"))
     threshold = int(Prompt.ask("请输入汉明距离阈值", default="5"))
     

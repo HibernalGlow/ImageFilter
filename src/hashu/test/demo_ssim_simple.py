@@ -175,7 +175,7 @@ def main():
     console.print("[yellow]此版本专为快速测试设计，支持图片数量限制[/yellow]\n")
     
     # 输入参数
-    folder = Prompt.ask("📁 请输入图片文件夹路径", default="E:\\2EHV\\test")
+    folder = Prompt.ask("📁 请输入图片文件夹路径", default="E:\\1Hub\\EH\\2EHV\\test")
     
     # 图片数量限制
     max_images = IntPrompt.ask("🔢 最大处理图片数量（避免计算时间过长）", default=20)

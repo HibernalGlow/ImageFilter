@@ -456,7 +456,7 @@ def main():
     console.print("[yellow]基于图像结构特征生成短哈希，支持数据库存储[/yellow]\n")
     
     # 输入参数
-    folder = Prompt.ask("📁 请输入图片文件夹路径", default="E:\\2EHV\\test")
+    folder = Prompt.ask("📁 请输入图片文件夹路径", default="E:\\1Hub\\EH\\2EHV\\test")
     
     # 特征参数
     feature_dim = IntPrompt.ask("🔢 结构哈希维度（推荐32-128）", default=64)

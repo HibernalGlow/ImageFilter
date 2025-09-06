@@ -343,7 +343,7 @@ def main():
     console.print("[yellow]支持预处理缓存和SSIM结果缓存，大幅提升重复计算效率[/yellow]\n")
     
     # 输入参数
-    folder = Prompt.ask("📁 请输入图片文件夹路径", default="E:\\2EHV\\test")
+    folder = Prompt.ask("📁 请输入图片文件夹路径", default="E:\\1Hub\\EH\\2EHV\\test")
     
     # 是否启用缓存
     use_cache = Confirm.ask("💾 是否启用缓存？(推荐)", default=True)

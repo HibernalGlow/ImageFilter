@@ -3,6 +3,7 @@
   "min_keep": 1,
     "rules": [
       { "type": "version" },
+      { "type": "keyword", "keywords": ["[eve重嵌]"], "scope": "chinese", "keep_matching": false },
       { "type": "keyword", "keywords": ["无修", "無修", "uncensor", "无码", "無碼", "去码"], "scope": "chinese", "keep_matching": true },
       { "type": "keyword", "keywords": ["dl", "dlsite", "dl版", "DL", "DL版"], "scope": "chinese", "keep_matching": true },
       { "type": "keyword", "keywords": ["官方", "简体中文", "简中", "简体", "数位", "數位"], "scope": "chinese", "keep_matching": true },
