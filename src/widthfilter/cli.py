@@ -25,7 +25,7 @@ def parse_command_line() -> Dict[str, Any]:
     parser = argparse.ArgumentParser(description='图片宽度/高度过滤工具')
     parser.add_argument('-c', '--clipboard', action='store_true', help='从剪贴板读取源目录路径')
     parser.add_argument('-s', '--source', type=str, help='源目录路径', default=r"E:\999EHV")
-    parser.add_argument('-t', '--target', type=str, help='目标目录路径', default=r"E:\7EHV")
+    parser.add_argument('-t', '--target', type=str, help='目标目录路径', default=r"E:\1Hub\EH\7EHV")
     parser.add_argument('-w', '--width', type=int, help='宽度阈值', default=1800)
     parser.add_argument('-l', '--larger', action='store_true', help='选择大于等于指定宽度的文件')
     parser.add_argument('-m', '--move', action='store_true', help='移动文件而不是复制')

@@ -192,8 +192,8 @@ python visualize_results.py --input phash_analysis.json --output charts
 {
     "默认": {
         "description": "默认配置 - 大于等于1800像素宽度",
-        "source_dir": "E:\\999EHV",
-        "target_dir": "E:\\7EHV",
+        "source_dir": "E:\\1Hub\\EH\\999EHV",
+        "target_dir": "E:\\1Hub\\EH\\7EHV",
         "dimension_rules": [
             {
                 "min_width": 1800,
@@ -210,8 +210,8 @@ python visualize_results.py --input phash_analysis.json --output charts
     },
     "双重分组": {
         "description": "双重分组 - 按不同宽度范围分组",
-        "source_dir": "E:\\999EHV",
-        "target_dir": "E:\\7EHV",
+        "source_dir": "E:\\1Hub\\EH\\999EHV",
+        "target_dir": "E:\\1Hub\\EH\\7EHV",
         "dimension_rules": [
             {
                 "min_width": 0,
