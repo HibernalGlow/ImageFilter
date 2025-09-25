@@ -348,6 +348,47 @@ def process_file_group(group_files: List[str], base_dir: str, trash_dir: str, cr
     from rawfilter.run import shorten_number_cn
     from loguru import logger
     result_stats = {'moved_to_trash': 0, 'moved_to_multi': 0, 'created_shortcuts': 0}
+    
+    # 将虚拟伪文件 (.folderzip) 解析为真实目录路径，用于后续物理操作
+    def _resolve_virtual_path(path: str) -> Tuple[str, bool]:
+        if path.endswith(VIRTUAL_FOLDER_SUFFIX):
+            return os.path.dirname(path), True
+        return path, False
+
+    # 统一的安全移动：文件走原有逻辑，目录使用目录移动校验
+    def safe_move_entry(src_path: str, dst_path: str) -> bool:
+        real_src, is_virtual = _resolve_virtual_path(src_path)
+        try:
+            if os.path.isdir(real_src):
+                # 目录移动：确保目标上级存在，然后整体移动
+                os.makedirs(os.path.dirname(dst_path), exist_ok=True)
+                try:
+                    # 若目标位置已有同名目录，尝试合并/回退
+                    if os.path.exists(dst_path):
+                        # 直接将源目录移到目标目录的同名下（避免覆盖），追加时间戳后缀
+                        base = os.path.basename(real_src)
+                        dst_parent = dst_path
+                        if not os.path.isdir(dst_parent):
+                            # 若 dst_path 不是目录，取其父目录
+                            dst_parent = os.path.dirname(dst_path)
+                        os.makedirs(dst_parent, exist_ok=True)
+                        ts = datetime.now().strftime('%H%M%S')
+                        final_dst = os.path.join(dst_parent, f"{base}__mv_{ts}")
+                        shutil.move(real_src, final_dst)
+                        return os.path.exists(final_dst)
+                    else:
+                        shutil.move(real_src, dst_path)
+                        return os.path.exists(dst_path)
+                except Exception as e:
+                    logger.error("[#error_log] 目录移动失败 {} -> {}: {}", real_src, dst_path, e)
+                    return False
+            else:
+                # 文件移动：调用既有的安全逻辑
+                from rawfilter.__main__ import safe_move_file as _safe_move_file
+                return _safe_move_file(real_src, dst_path)
+        except Exception as e:
+            logger.error("[#error_log] 移动异常 {} -> {}: {}", src_path, dst_path, e)
+            return False
     # 参数调试日志，便于确认 trash_only 等开关是否正确传递
     logger.info("[#debug] 参数: trash_only={} enable_multi_main={} name_only_mode={} 文件数={}", trash_only, enable_multi_main, name_only_mode, len(group_files))
     group_base_name, _ = clean_filename(group_files[0])
@@ -445,7 +486,7 @@ def process_file_group(group_files: List[str], base_dir: str, trash_dir: str, cr
             base_dir,
             trash_dir,
             result_stats,
-            safe_move_file,
+            safe_move_entry,
             logger,
             create_shortcuts,
             create_shortcut,
@@ -453,10 +494,7 @@ def process_file_group(group_files: List[str], base_dir: str, trash_dir: str, cr
     except Exception as e:
         logger.error("[#error_log] 裁剪规则引擎异常: {}", e)
 
-    # 虚拟伪文件组不进行物理移动，只统计
-    if any(f.endswith(VIRTUAL_FOLDER_SUFFIX) for f in group_files):
-        logger.info("[#virtual] 🧪 跳过虚拟组物理操作 ({} 个条目)", len(group_files))
-        return result_stats
+    # 允许对虚拟组执行物理操作：对 .folderzip 解析为其目录后进行移动/快捷方式创建
 
     if chinese_versions:
         if len(chinese_versions) > 1:
@@ -464,44 +502,54 @@ def process_file_group(group_files: List[str], base_dir: str, trash_dir: str, cr
                 multi_dir = os.path.join(base_dir, 'multi')
                 os.makedirs(multi_dir, exist_ok=True)
                 if enable_multi_main:
-                    main_file = max(chinese_versions, key=lambda x: os.path.getsize(os.path.join(base_dir, x)))
-                    if handle_multi_main_file(main_file, base_dir):
-                        logger.info("[#file_ops] ✅ 已处理multi-main文件: {}", main_file)
+                    try:
+                        main_file = max(chinese_versions, key=lambda x: os.path.getsize(os.path.join(base_dir, x)))
+                    except Exception:
+                        main_file = chinese_versions[0]
+                    real_main, is_virtual = _resolve_virtual_path(os.path.join(base_dir, main_file))
+                    if os.path.isdir(real_main):
+                        logger.info("[#file_ops] ⏭️ multi-main 跳过目录候选: {}", main_file)
+                    else:
+                        if handle_multi_main_file(main_file, base_dir):
+                            logger.info("[#file_ops] ✅ 已处理multi-main文件: {}", main_file)
                 for file in chinese_versions:
-                    src_path = os.path.join(base_dir, file)
-                    rel_path = os.path.relpath(src_path, base_dir)
+                    src_entry = os.path.join(base_dir, file)
+                    real_src, _ = _resolve_virtual_path(src_entry)
+                    rel_path = os.path.relpath(real_src, base_dir)
                     dst_path = os.path.join(multi_dir, rel_path)
-                    if safe_move_file(src_path, dst_path):
+                    if safe_move_entry(real_src, dst_path):
                         logger.info("[#file_ops] ✅ 已移动到multi: {}", file)
                         result_stats['moved_to_multi'] += 1
             else:
                 logger.info("[#pruner] 🛑 trash_only 模式：跳过 multi 移动 (汉化多版本共 {} 个)", len(chinese_versions))
             for other_file in other_versions:
-                src_path = os.path.join(base_dir, other_file)
-                rel_path = os.path.relpath(src_path, base_dir)
+                src_entry = os.path.join(base_dir, other_file)
+                real_src, _ = _resolve_virtual_path(src_entry)
+                rel_path = os.path.relpath(real_src, base_dir)
                 dst_path = os.path.join(trash_dir, rel_path)
                 if create_shortcuts:
                     shortcut_path = os.path.splitext(dst_path)[0]
-                    if create_shortcut(src_path, shortcut_path):
+                    if create_shortcut(real_src, shortcut_path):
                         logger.info("[#file_ops] ✅ 已创建快捷方式: {}", other_file)
                         result_stats['created_shortcuts'] += 1
                 else:
-                    if safe_move_file(src_path, dst_path):
+                    if safe_move_entry(real_src, dst_path):
                         logger.info("[#file_ops] ✅ 已移动到trash: {}", other_file)
                         result_stats['moved_to_trash'] += 1
         else:
             logger.info("[#group_info] 🔍 组[{}]处理: 发现1个需要保留的版本，保持原位置", group_base_name)
             for other_file in other_versions:
-                src_path = os.path.join(base_dir, other_file)
-                rel_path = os.path.relpath(src_path, base_dir)
+                src_entry = os.path.join(base_dir, other_file)
+                real_src, _ = _resolve_virtual_path(src_entry)
+                rel_path = os.path.relpath(real_src, base_dir)
                 dst_path = os.path.join(trash_dir, rel_path)
                 if create_shortcuts:
                     shortcut_path = os.path.splitext(dst_path)[0]
-                    if create_shortcut(src_path, shortcut_path):
+                    if create_shortcut(real_src, shortcut_path):
                         logger.info("[#file_ops] ✅ 已创建快捷方式: {}", other_file)
                         result_stats['created_shortcuts'] += 1
                 else:
-                    if safe_move_file(src_path, dst_path):
+                    if safe_move_entry(real_src, dst_path):
                         logger.info("[#file_ops] ✅ 已移动到trash: {}", other_file)
                         result_stats['moved_to_trash'] += 1
     else:
@@ -510,14 +558,22 @@ def process_file_group(group_files: List[str], base_dir: str, trash_dir: str, cr
                 multi_dir = os.path.join(base_dir, 'multi')
                 os.makedirs(multi_dir, exist_ok=True)
                 if enable_multi_main:
-                    main_file = max(other_versions, key=lambda x: os.path.getsize(os.path.join(base_dir, x)))
-                    if handle_multi_main_file(main_file, base_dir):
-                        logger.info("[#file_ops] ✅ 已处理multi-main文件: {}", main_file)
+                    try:
+                        main_file = max(other_versions, key=lambda x: os.path.getsize(os.path.join(base_dir, x)))
+                    except Exception:
+                        main_file = other_versions[0]
+                    real_main, is_virtual = _resolve_virtual_path(os.path.join(base_dir, main_file))
+                    if os.path.isdir(real_main):
+                        logger.info("[#file_ops] ⏭️ multi-main 跳过目录候选: {}", main_file)
+                    else:
+                        if handle_multi_main_file(main_file, base_dir):
+                            logger.info("[#file_ops] ✅ 已处理multi-main文件: {}", main_file)
                 for file in other_versions:
-                    src_path = os.path.join(base_dir, file)
-                    rel_path = os.path.relpath(src_path, base_dir)
+                    src_entry = os.path.join(base_dir, file)
+                    real_src, _ = _resolve_virtual_path(src_entry)
+                    rel_path = os.path.relpath(real_src, base_dir)
                     dst_path = os.path.join(multi_dir, rel_path)
-                    if safe_move_file(src_path, dst_path):
+                    if safe_move_entry(real_src, dst_path):
                         logger.info("[#file_ops] ✅ 已移动到multi: {}", file)
                         result_stats['moved_to_multi'] += 1
                 logger.info("[#group_info] 🔍 组[{}]处理: 未发现汉化版本，发现{}个原版，已移动到multi", group_base_name, len(other_versions))

@@ -16,7 +16,10 @@ tasks:
     desc: "name-only模式 - 从剪贴板读取路径，执行标准处理"
     cmds:
       - "{{.PYTHON_CMD}} --clipboard --name-only-mode"
-
+  vitrual-repack:
+    desc: "name-only模式 - 从剪贴板读取路径，执行标准处理"
+    cmds:
+      - "{{.PYTHON_CMD}} --clipboard --name-only-mode --virtual-folders --auto-repacku"
   trash-only:
     desc: "trash-only模式 - 从剪贴板读取路径，执行标准处理"
     cmds:
