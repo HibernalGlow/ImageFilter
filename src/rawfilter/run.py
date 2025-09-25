@@ -237,12 +237,12 @@ def process_file_with_count(file_path: str, name_only_mode: bool = False) -> Tup
     name = re.sub(r'\{[^}]*\}', '', name)
     metrics = {'width': 0, 'page_count': 0, 'clarity_score': 0.0}
 
-    # 处理虚拟文件夹情形：路径不存在且以伪扩展结尾，真实目录为去掉伪文件名后的目录
+    # 处理虚拟文件夹情形：路径不存在且以伪扩展结尾，真实目录为去掉伪扩展后的同名目录
     is_virtual = False
     real_folder = None
     if not os.path.exists(full_path) and file_name.endswith(VIRTUAL_FOLDER_SUFFIX):
-        # real folder = 当前相对目录 (去掉 pseudo 文件名)
-        real_folder = os.path.dirname(full_path)  # 相对路径
+        # 真实目录 = 去掉 .folderzip 后缀，例如 A/B/C.folderzip -> A/B/C
+        real_folder = os.path.splitext(full_path)[0]
         # 如果 real_folder 为空字符串，表示根目录
         # 仅当该目录真实存在才标记为虚拟
         if real_folder and os.path.isdir(real_folder):
@@ -692,16 +692,17 @@ def process_directory(
                 # 以目录路径末级名伪造一个 zip 名称，后续 group_similar_files 使用文件名聚类
                 p = Path(path)
                 if p.is_dir() and p.exists():
-                    pseudo_name = f"{p.name}.folderzip"  # 使用自定义扩展避免与真实压缩冲突
+                    # 伪文件放在该目录的父级下：形如 A/B/C.folderzip （而不是 A/B/C/C.folderzip）
                     rel = os.path.relpath(str(p), directory)
-                    # 避免与真实文件同名冲突
-                    marker = os.path.join(rel, pseudo_name) if os.path.isdir(p) else rel
+                    marker = rel + VIRTUAL_FOLDER_SUFFIX
                     all_files.append(marker)
             for child in node.get('children', []) or []:
                 collect_virtual(child)
         collect_virtual(repacku_tree)
         if all_files:
-            logger.info("[#process] 📦 已追加虚拟文件夹数 (计入 all_files 总数): {}", len(all_files))
+            count_virtual = sum(1 for f in all_files if f.endswith(VIRTUAL_FOLDER_SUFFIX))
+            if count_virtual:
+                logger.info("[#process] 📦 已追加虚拟文件夹标记数: {}", count_virtual)
     if not all_files:
         logger.info("[#error_log] ⚠️ 目录 {} 中未找到压缩文件", directory)
         return
