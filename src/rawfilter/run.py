@@ -24,6 +24,9 @@ IMAGE_EXTENSIONS = {
     '.gif', '.bmp', '.tiff', '.tif', '.heic', '.heif'
 }
 
+# 虚拟文件夹伪扩展（用于把文件夹当作压缩包参与分组 / 指标计算）
+VIRTUAL_FOLDER_SUFFIX = '.folderzip'
+
 def get_image_count(archive_path: str) -> int:
     try:
         try:
@@ -234,6 +237,72 @@ def process_file_with_count(file_path: str, name_only_mode: bool = False) -> Tup
     name = re.sub(r'\{[^}]*\}', '', name)
     metrics = {'width': 0, 'page_count': 0, 'clarity_score': 0.0}
 
+    # 处理虚拟文件夹情形：路径不存在且以伪扩展结尾，真实目录为去掉伪文件名后的目录
+    is_virtual = False
+    real_folder = None
+    if not os.path.exists(full_path) and file_name.endswith(VIRTUAL_FOLDER_SUFFIX):
+        # real folder = 当前相对目录 (去掉 pseudo 文件名)
+        real_folder = os.path.dirname(full_path)  # 相对路径
+        # 如果 real_folder 为空字符串，表示根目录
+        # 仅当该目录真实存在才标记为虚拟
+        if real_folder and os.path.isdir(real_folder):
+            is_virtual = True
+        else:
+            # 可能是相对路径，需要结合进程工作目录再判断
+            if os.path.isdir(os.path.abspath(real_folder)):
+                is_virtual = True
+        if is_virtual:
+            logger.info("[#virtual] 📂 作为虚拟压缩包处理目录: {}", real_folder or '.')
+
+    if is_virtual:
+        # 遍历目录收集图片文件（仅第一层，避免深度遍历成本；可按需更改为 os.walk）
+        try:
+            abs_folder = os.path.abspath(real_folder) if real_folder else os.getcwd()
+            image_files = []
+            for root, _, files in os.walk(abs_folder):
+                for f in files:
+                    if os.path.splitext(f.lower())[1] in IMAGE_EXTENSIONS:
+                        fpath = os.path.join(root, f)
+                        try:
+                            size = os.path.getsize(fpath)
+                        except OSError:
+                            size = 0
+                        image_files.append((fpath, size))
+                break  # 只处理一层
+            metrics['page_count'] = len(image_files)
+            if image_files:
+                # 选样本同归档逻辑
+                image_files.sort(key=lambda x: x[1], reverse=True)
+                samples = []
+                samples.append(image_files[0][0])
+                if len(image_files) > 2:
+                    samples.append(image_files[len(image_files)//2][0])
+                top_30 = image_files[:max(3, len(image_files)//3)]
+                import random as _r
+                while len(samples) < 3 and top_30:
+                    c = _r.choice(top_30)[0]
+                    if c not in samples:
+                        samples.append(c)
+                widths = []
+                clarity_scores = []
+                for sp in samples:
+                    try:
+                        with Image.open(sp) as img:
+                            widths.append(img.width)
+                            # 读取二进制用于清晰度计算
+                            with open(sp, 'rb') as rf:
+                                clarity_scores.append(ImageClarityEvaluator.calculate_definition(rf.read()))
+                    except Exception as e:
+                        logger.info("[#virtual] ⚠️ 样本读取失败 {}: {}", sp, e)
+                if widths:
+                    metrics['width'] = int(sorted(widths)[len(widths)//2])
+                if clarity_scores:
+                    metrics['clarity_score'] = sum(clarity_scores)/len(clarity_scores)
+        except Exception as e:
+            logger.error("[#error_log] 虚拟目录指标计算失败 {}: {}", real_folder, e)
+        # 虚拟目录不重命名，保持 pseudo 名称供分组引用
+        return file_path, file_path, metrics
+
     # 如果是仅名称模式，跳过所有内部分析
     if name_only_mode:
         logger.info("[#name_only] 🏷️ 仅名称模式，跳过内部分析: {}", file_name)
@@ -326,6 +395,10 @@ def process_file_group(group_files: List[str], base_dir: str, trash_dir: str, cr
     else:
         # 标准模式：添加组号和指标
         for old_path, _ in processed_files:
+            # 虚拟伪文件不做真实文件系统重命名
+            if old_path.endswith(VIRTUAL_FOLDER_SUFFIX):
+                updated_files.append((old_path, old_path))
+                continue
             metrics = file_metrics[old_path]
             parts = []
             parts.append(f"🪆G{group_id:04d}")
@@ -379,6 +452,11 @@ def process_file_group(group_files: List[str], base_dir: str, trash_dir: str, cr
         )
     except Exception as e:
         logger.error("[#error_log] 裁剪规则引擎异常: {}", e)
+
+    # 虚拟伪文件组不进行物理移动，只统计
+    if any(f.endswith(VIRTUAL_FOLDER_SUFFIX) for f in group_files):
+        logger.info("[#virtual] 🧪 跳过虚拟组物理操作 ({} 个条目)", len(group_files))
+        return result_stats
 
     if chinese_versions:
         if len(chinese_versions) > 1:
@@ -449,10 +527,88 @@ def process_file_group(group_files: List[str], base_dir: str, trash_dir: str, cr
             logger.info("[#group_info] 🔍 组[{}]处理: 未发现汉化版本，仅有1个原版，保持原位置", group_base_name)
     return result_stats
 
-def process_directory(directory: str, report_generator: ReportGenerator, dry_run: bool = False, create_shortcuts: bool = False, enable_multi_main: bool = False, name_only_mode: bool = False, trash_only: bool = False) -> None:
+def process_directory(
+    directory: str,
+    report_generator: ReportGenerator,
+    dry_run: bool = False,
+    create_shortcuts: bool = False,
+    enable_multi_main: bool = False,
+    name_only_mode: bool = False,
+    trash_only: bool = False,
+    virtual_folders: bool = False,
+    repacku_config_path: Optional[str] = None,
+    auto_repacku: bool = True,
+) -> None:
     from rawfilter.__main__ import group_similar_files
     from loguru import logger
     import os
+    import json
+    from pathlib import Path
+    # 延迟导入 repacku 分析器（可选）
+    def _load_repacku_config(cfg_path: str) -> Optional[dict]:
+        try:
+            with open(cfg_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception as e:
+            logger.error("[#error_log] 读取 repacku 配置失败 {}: {}", cfg_path, e)
+            return None
+    repacku_tree = None
+    repacku_cfg_used = None
+    if virtual_folders:
+        # 1) 如果用户指定了配置路径，直接读取
+        search_root = Path(directory)
+        if repacku_config_path and Path(repacku_config_path).is_file():
+            repacku_cfg_used = repacku_config_path
+            repacku_data = _load_repacku_config(repacku_config_path)
+            repacku_tree = (repacku_data or {}).get('folder_tree') if repacku_data else None
+        else:
+            # 2) 在当前目录寻找 *_config.json
+            candidates = list(search_root.glob('*_config.json'))
+            if candidates:
+                repacku_cfg_used = str(candidates[0])
+                repacku_data = _load_repacku_config(repacku_cfg_used)
+                repacku_tree = (repacku_data or {}).get('folder_tree') if repacku_data else None
+            elif auto_repacku:
+                # 3) 自动调用 repacku 生成
+                try:
+                    from repacku.core.folder_analyzer import analyze_folder
+                    repacku_cfg_used = analyze_folder(search_root, target_file_types=["image"], display=False)
+                    repacku_data = _load_repacku_config(repacku_cfg_used)
+                    repacku_tree = (repacku_data or {}).get('folder_tree') if repacku_data else None
+                    logger.info("[#process] 🤝 已自动生成 repacku 配置: {}", repacku_cfg_used)
+                except Exception as e:
+                    logger.error("[#error_log] 自动调用 repacku 失败: {}", e)
+        if repacku_tree is None:
+            logger.info("[#process] ⚠️ 未能获得 repacku 配置，启用简单文件夹虚拟模式 (首层含图片的目录) ")
+            try:
+                simple_nodes = []
+                for child in Path(directory).iterdir():
+                    if child.is_dir():
+                        # 判断是否包含图片文件（首层）
+                        has_image = any(
+                            f.is_file() and f.suffix.lower() in IMAGE_EXTENSIONS
+                            for f in child.iterdir() if f.is_file()
+                        )
+                        if has_image:
+                            simple_nodes.append(child)
+                if simple_nodes:
+                    repacku_tree = {
+                        'path': directory,
+                        'compress_mode': 'skip',
+                        'children': [
+                            {
+                                'path': str(n),
+                                'compress_mode': 'entire',
+                                'file_types': {'image': 1},
+                                'children': []
+                            } for n in simple_nodes
+                        ]
+                    }
+                    logger.info("[#process] 🧩 简易虚拟目录数量: {}", len(simple_nodes))
+            except Exception as e:
+                logger.error("[#error_log] 简易虚拟目录枚举失败: {}", e)
+        else:
+            logger.info("[#process] 🧩 已加载 repacku 配置 (virtual folders): {}", repacku_cfg_used)
     trash_dir = os.path.join(directory, 'trash')
     if not dry_run:
         os.makedirs(trash_dir, exist_ok=True)
@@ -469,6 +625,27 @@ def process_directory(directory: str, report_generator: ReportGenerator, dry_run
                 total = len(all_files)
                 if total % 10 == 0:
                     logger.info("[@process] 扫描进度: {} / {}", total, total)
+    # 根据 repacku 把符合条件的文件夹作为“虚拟压缩包”追加
+    if virtual_folders and repacku_tree:
+        def collect_virtual(node: dict):
+            mode = node.get('compress_mode')
+            path = node.get('path') or ''
+            file_types = node.get('file_types') or {}
+            # 仅把包含 image 或 archive 的且模式为 entire/selective 的目录纳入
+            if mode in ('entire', 'selective') and (file_types.get('image') or file_types.get('archive')):
+                # 以目录路径末级名伪造一个 zip 名称，后续 group_similar_files 使用文件名聚类
+                p = Path(path)
+                if p.is_dir() and p.exists():
+                    pseudo_name = f"{p.name}.folderzip"  # 使用自定义扩展避免与真实压缩冲突
+                    rel = os.path.relpath(str(p), directory)
+                    # 避免与真实文件同名冲突
+                    marker = os.path.join(rel, pseudo_name) if os.path.isdir(p) else rel
+                    all_files.append(marker)
+            for child in node.get('children', []) or []:
+                collect_virtual(child)
+        collect_virtual(repacku_tree)
+        if all_files:
+            logger.info("[#process] 📦 已追加虚拟文件夹数 (计入 all_files 总数): {}", len(all_files))
     if not all_files:
         logger.info("[#error_log] ⚠️ 目录 {} 中未找到压缩文件", directory)
         return

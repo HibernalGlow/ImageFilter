@@ -47,6 +47,9 @@ def main(
     name_only_mode: bool = typer.Option(False, "--name-only-mode", help="仅名称模式：仅通过文件名判断，不读内部，不添加指标标记"),
     trash_only: bool = typer.Option(False, "--trash-only", help="仅执行裁剪并把其余版本移入 trash，不创建/移动到 multi"),
     report: Optional[str] = typer.Option(None, "--report", help="指定报告文件名 (默认自动生成)"),
+    virtual_folders: bool = typer.Option(False, "--virtual-folders", help="将符合条件的文件夹当作‘虚拟压缩包’参与分组"),
+    repacku_config: Optional[Path] = typer.Option(None, "--repacku-config", help="指定 repacku 生成的 *_config.json (未指定则自动在根目录查找)"),
+    auto_repacku: bool = typer.Option(True, "--auto-repacku/--no-auto-repacku", help="自动调用 repacku FolderAnalyzer 生成配置 (当未找到现有 json 时)"),
 ) -> None:
     """主命令：执行目录扫描、分组、裁剪与移动。
 
@@ -88,6 +91,9 @@ def main(
             enable_multi_main=enable_multi_main,
             name_only_mode=name_only_mode,
             trash_only=trash_only,
+            virtual_folders=virtual_folders,
+            repacku_config_path=str(repacku_config) if repacku_config else None,
+            auto_repacku=auto_repacku,
         )
         logger.info("[#process] ✨ 目录处理完成: {}", p)
         # rpt = report_generator.save_report(p, report) if report else report_generator.save_report(p)
