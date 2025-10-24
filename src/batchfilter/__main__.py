@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Dict, Any, List, Set, Tuple, Optional
 from imgfilter.utils.archive import ArchiveHandler,SUPPORTED_ARCHIVE_FORMATS
 from imgfilter.utils.input import InputHandler
-from textual_preset import create_config_app
+# from textual_preset import create_config_app  # 已移除，使用 lata + Taskfile 替代
 from batchfilter.utils.merge import ArchiveMerger
 from textual_logger import TextualLoggerManager
 import shutil
@@ -518,18 +518,25 @@ class Application:
             args = parser.parse_args()
             self.process_with_args(args)
 
-        # 创建配置界面
-        app = create_config_app(
-            program=__file__,
-            parser=parser,
-            title="图片过滤工具",
-            preset_configs=preset_configs,
-            on_run=on_run
-            # on_run=False
-        )
-        
-        # 运行配置界面
-        app.run()
+        # 创建配置界面 - 尝试启动 lata
+        try:
+            script_dir = Path(__file__).parent
+            result = subprocess.run("lata", cwd=script_dir)
+            if result.returncode == 0:
+                return
+        except FileNotFoundError:
+            print("\n图片过滤工具")
+            print("=" * 50)
+            print("未找到 'lata' 命令。请使用以下方式之一:\n")
+            print("  1. 安装 lata: pip install lata")
+            print("     然后运行: lata")
+            print("\n  2. 使用命令行参数运行")
+            print("     例如: batchfilter --help")
+            print("\n  3. 直接使用 task 命令")
+            print("     例如: task remove-small")
+            print("=" * 50)
+        except Exception as e:
+            logger.error(f"启动 lata 失败: {e}")
     
     def run(self) -> int:
         """主函数入口
@@ -546,12 +553,24 @@ class Application:
                 success = self.process_with_args(args)
                 return 0 if success else 1
                 
-            # TUI模式处理
+            # TUI模式处理 - 启动 lata 交互式任务选择器
             else:
-                # 初始化日志系统（默认使用TUI模式）
-                config_manager.setup_logger(app_name="batch_img_filter", use_tui=True)
-                self.run_tui_mode()
-                return 0
+                try:
+                    script_dir = Path(__file__).parent
+                    result = subprocess.run("lata", cwd=script_dir)
+                    return result.returncode
+                except FileNotFoundError:
+                    print("\n图片过滤工具")
+                    print("=" * 50)
+                    print("未找到 'lata' 命令，请先安装: pip install lata")
+                    print("\n或使用以下方式:")
+                    print("  1. 使用命令行参数: batchfilter --help")
+                    print("  2. 直接运行 task: task remove-small")
+                    print("=" * 50)
+                    return 1
+                except Exception as e:
+                    logger.error(f"启动 lata 失败: {e}")
+                    return 1
                 
         except Exception as e:
             # 确保异常也能正确记录到日志

@@ -7,7 +7,7 @@ import time
 import subprocess
 import argparse
 import pyperclip
-from textual_preset import create_config_app, ConfigOption, CheckboxOption, InputOption, PresetConfig
+# from textual_preset import create_config_app, ConfigOption, CheckboxOption, InputOption, PresetConfig  # 已移除，使用 lata + Taskfile 替代
 from imgfilter.utils.backup import BackupHandler
 from imgfilter.utils.archive_process import ArchiveHandler
 # from imgfilter.scripts.image_filter_old import ImageFilter
@@ -638,19 +638,28 @@ def run_tui():
             }
         }
     }
-    # 创建TUI应用
+    # 创建TUI应用 - 尝试启动 lata
     parser = setup_cli_parser()
-    app = create_config_app(
-        program=__file__,
-        parser=parser,
-        title="招募封面图片过滤工具",
-        preset_configs=preset_configs,
-        # on_run=run_with_args
-    )
     
-    # 运行TUI应用
-    app.run()
-    return True
+    try:
+        script_dir = Path(__file__).parent
+        result = subprocess.run("lata", cwd=script_dir)
+        return result.returncode == 0
+    except FileNotFoundError:
+        print("\n招募封面图片过滤工具")
+        print("=" * 50)
+        print("未找到 'lata' 命令。请使用以下方式之一:\n")
+        print("  1. 安装 lata: pip install lata")
+        print("     然后运行: lata")
+        print("\n  2. 使用命令行参数运行")
+        print("     例如: recruitfilter --help")
+        print("\n  3. 直接使用 task 命令")
+        print("     查看可用任务: task --list")
+        print("=" * 50)
+        return True
+    except Exception as e:
+        print(f"启动 lata 失败: {e}")
+        return False
 
 def run_with_args(params):
     """统一处理参数函数 

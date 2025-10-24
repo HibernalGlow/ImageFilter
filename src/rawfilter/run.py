@@ -351,8 +351,23 @@ def process_file_group(group_files: List[str], base_dir: str, trash_dir: str, cr
     
     # 将虚拟伪文件 (.folderzip) 解析为真实目录路径，用于后续物理操作
     def _resolve_virtual_path(path: str) -> Tuple[str, bool]:
+        """解析虚拟文件夹路径
+        
+        Args:
+            path: 可能包含 .folderzip 后缀的路径
+            
+        Returns:
+            (真实路径, 是否为虚拟路径) 的元组
+            
+        Examples:
+            '漫画A.folderzip' -> ('漫画A', True)
+            'path/to/folder.folderzip' -> ('path/to/folder', True)
+            'normal.zip' -> ('normal.zip', False)
+        """
         if path.endswith(VIRTUAL_FOLDER_SUFFIX):
-            return os.path.dirname(path), True
+            # 去掉 .folderzip 后缀得到真实目录路径
+            real_path = path[:-len(VIRTUAL_FOLDER_SUFFIX)]
+            return real_path, True
         return path, False
 
     # 统一的安全移动：文件走原有逻辑，目录使用目录移动校验
@@ -513,43 +528,49 @@ def process_file_group(group_files: List[str], base_dir: str, trash_dir: str, cr
                         if handle_multi_main_file(main_file, base_dir):
                             logger.info("[#file_ops] ✅ 已处理multi-main文件: {}", main_file)
                 for file in chinese_versions:
-                    src_entry = os.path.join(base_dir, file)
-                    real_src, _ = _resolve_virtual_path(src_entry)
-                    rel_path = os.path.relpath(real_src, base_dir)
+                    # file 可能包含 .folderzip 后缀，需要先解析
+                    real_file, is_virtual = _resolve_virtual_path(file)
+                    src_path = os.path.join(base_dir, real_file)
+                    # 计算相对路径用于目标位置
+                    rel_path = os.path.relpath(src_path, base_dir)
                     dst_path = os.path.join(multi_dir, rel_path)
-                    if safe_move_entry(real_src, dst_path):
+                    if safe_move_entry(src_path, dst_path):
                         logger.info("[#file_ops] ✅ 已移动到multi: {}", file)
                         result_stats['moved_to_multi'] += 1
             else:
                 logger.info("[#pruner] 🛑 trash_only 模式：跳过 multi 移动 (汉化多版本共 {} 个)", len(chinese_versions))
             for other_file in other_versions:
-                src_entry = os.path.join(base_dir, other_file)
-                real_src, _ = _resolve_virtual_path(src_entry)
-                rel_path = os.path.relpath(real_src, base_dir)
+                # other_file 可能包含 .folderzip 后缀，需要先解析
+                real_file, is_virtual = _resolve_virtual_path(other_file)
+                src_path = os.path.join(base_dir, real_file)
+                # 计算相对路径用于目标位置
+                rel_path = os.path.relpath(src_path, base_dir)
                 dst_path = os.path.join(trash_dir, rel_path)
                 if create_shortcuts:
                     shortcut_path = os.path.splitext(dst_path)[0]
-                    if create_shortcut(real_src, shortcut_path):
+                    if create_shortcut(src_path, shortcut_path):
                         logger.info("[#file_ops] ✅ 已创建快捷方式: {}", other_file)
                         result_stats['created_shortcuts'] += 1
                 else:
-                    if safe_move_entry(real_src, dst_path):
+                    if safe_move_entry(src_path, dst_path):
                         logger.info("[#file_ops] ✅ 已移动到trash: {}", other_file)
                         result_stats['moved_to_trash'] += 1
         else:
             logger.info("[#group_info] 🔍 组[{}]处理: 发现1个需要保留的版本，保持原位置", group_base_name)
             for other_file in other_versions:
-                src_entry = os.path.join(base_dir, other_file)
-                real_src, _ = _resolve_virtual_path(src_entry)
-                rel_path = os.path.relpath(real_src, base_dir)
+                # other_file 可能包含 .folderzip 后缀，需要先解析
+                real_file, is_virtual = _resolve_virtual_path(other_file)
+                src_path = os.path.join(base_dir, real_file)
+                # 计算相对路径用于目标位置
+                rel_path = os.path.relpath(src_path, base_dir)
                 dst_path = os.path.join(trash_dir, rel_path)
                 if create_shortcuts:
                     shortcut_path = os.path.splitext(dst_path)[0]
-                    if create_shortcut(real_src, shortcut_path):
+                    if create_shortcut(src_path, shortcut_path):
                         logger.info("[#file_ops] ✅ 已创建快捷方式: {}", other_file)
                         result_stats['created_shortcuts'] += 1
                 else:
-                    if safe_move_entry(real_src, dst_path):
+                    if safe_move_entry(src_path, dst_path):
                         logger.info("[#file_ops] ✅ 已移动到trash: {}", other_file)
                         result_stats['moved_to_trash'] += 1
     else:
@@ -569,11 +590,13 @@ def process_file_group(group_files: List[str], base_dir: str, trash_dir: str, cr
                         if handle_multi_main_file(main_file, base_dir):
                             logger.info("[#file_ops] ✅ 已处理multi-main文件: {}", main_file)
                 for file in other_versions:
-                    src_entry = os.path.join(base_dir, file)
-                    real_src, _ = _resolve_virtual_path(src_entry)
-                    rel_path = os.path.relpath(real_src, base_dir)
+                    # file 可能包含 .folderzip 后缀，需要先解析
+                    real_file, is_virtual = _resolve_virtual_path(file)
+                    src_path = os.path.join(base_dir, real_file)
+                    # 计算相对路径用于目标位置
+                    rel_path = os.path.relpath(src_path, base_dir)
                     dst_path = os.path.join(multi_dir, rel_path)
-                    if safe_move_entry(real_src, dst_path):
+                    if safe_move_entry(src_path, dst_path):
                         logger.info("[#file_ops] ✅ 已移动到multi: {}", file)
                         result_stats['moved_to_multi'] += 1
                 logger.info("[#group_info] 🔍 组[{}]处理: 未发现汉化版本，发现{}个原版，已移动到multi", group_base_name, len(other_versions))

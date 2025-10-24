@@ -38,7 +38,6 @@ dependencies = [
     "pillow-avif-plugin>=1.4.6",
     "pillow-jxl-plugin>=1.3.2",
     "TextualLog @ git+https://github.com/HibernalGlow/TextualLog.git",
-    "PresetUI @ git+https://github.com/HibernalGlow/PresetUI.git",
     "imagehash",
     "regex", 
     "orjson>=3.10.18",

@@ -30,7 +30,7 @@ from PIL.Image import DecompressionBombWarning  # 新增：导入PIL的警告类
 import orjson
 # 添加项目根目录到Python路径
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from textual_preset import create_config_app
+# from textual_preset import create_config_app  # 已移除，使用 lata + Taskfile 替代
 from hashu.core.calculate_hash_custom import ImageHashCalculator
 from textual_logger import TextualLoggerManager
 from loguru import logger
