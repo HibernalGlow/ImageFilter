@@ -160,3 +160,14 @@ auto_repacku: bool = typer.Option(
 **修复者：** AI Assistant  
 **测试状态：** ✅ 通过 (100%)
 
+
+
+
+
+
+
+
+
+
+
+
